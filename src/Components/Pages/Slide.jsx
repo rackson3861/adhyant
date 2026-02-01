@@ -52,7 +52,7 @@ export default function Slide() {
         <div className="carousel-inner">
           <div className="carousel-item active">
             <div className="owl-carousel-item position-relative">
-              <img className="img-fluid" src="/img/imagescroller12.svg" alt="Adhyant Coaching" loading="eager" fetchpriority="high" />
+              <img className="img-fluid" src="/img/imagescroller12.jpg" alt="Adhyant Coaching" loading="eager" fetchpriority="high" />
               <div
                 className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center"
               >
@@ -97,7 +97,7 @@ export default function Slide() {
 
           <div className="carousel-item">
             <div className="owl-carousel-item position-relative">
-              <img className="img-fluid" src="/img/imagescroller12.svg" alt="Adhyant IIT Coaching" loading="lazy" />
+              <img className="img-fluid" src="/img/imagescroller12.jpg" alt="Adhyant IIT Coaching" loading="lazy" />
               <div
                 className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center"
               >
@@ -146,7 +146,7 @@ export default function Slide() {
 
           <div className="carousel-item">
             <div className="owl-carousel-item position-relative">
-              <img className="img-fluid" src="/img/IITians.svg" alt="" />
+              <img className="img-fluid" src="/img/IITians.jpg" alt="" />
               <div
                 className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center"
               >
@@ -155,7 +155,7 @@ export default function Slide() {
           </div>
           <div className="carousel-item">
             <div className="owl-carousel-item position-relative">
-              <img className="img-fluid" src="/img/NEET.svg" alt="" />
+              <img className="img-fluid" src="/img/NEET.jpg" alt="" />
               <div
                 className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center"
               >
