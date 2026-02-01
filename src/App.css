@@ -18,6 +18,51 @@
     color: black;
 }
 
+/* Instagram Floating Button */
+.instagram-float {
+    position: fixed;
+    bottom: 110px;
+    right: 30px;
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(45deg, #c7581f 0%, #b43d24 25%, #a01835 50%, #8b1a4d 75%, #6d0f5e 100%);
+    color: white;
+    border-radius: 50%;
+    text-align: center;
+    font-size: 30px;
+    box-shadow: 0 4px 20px rgba(160, 24, 53, 0.5);
+    z-index: 1000;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    animation: pulseInstagram 2s infinite;
+}
+
+.instagram-float:hover {
+    transform: scale(1.1) rotate(5deg);
+    box-shadow: 0 6px 30px rgba(160, 24, 53, 0.7);
+}
+
+.instagram-icon {
+    width: 32px;
+    height: 32px;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+@keyframes pulseInstagram {
+    0% {
+        box-shadow: 0 4px 20px rgba(160, 24, 53, 0.5);
+    }
+    50% {
+        box-shadow: 0 4px 20px rgba(160, 24, 53, 0.8), 0 0 0 10px rgba(160, 24, 53, 0);
+    }
+    100% {
+        box-shadow: 0 4px 20px rgba(160, 24, 53, 0.5);
+    }
+}
+
 /* WhatsApp Floating Button */
 .whatsapp-float {
     position: fixed;
@@ -66,6 +111,18 @@
 
 /* Mobile responsive */
 @media screen and (max-width: 768px) {
+    .instagram-float {
+        bottom: 90px;
+        right: 20px;
+        width: 50px;
+        height: 50px;
+    }
+    
+    .instagram-icon {
+        width: 26px;
+        height: 26px;
+    }
+    
     .whatsapp-float {
         bottom: 20px;
         right: 20px;
@@ -80,12 +137,24 @@
     
     /* Back to top button positioning on mobile */
     .back-to-top {
-        bottom: 90px !important;
+        bottom: 160px !important;
         right: 20px !important;
     }
 }
 
 @media screen and (max-width: 576px) {
+    .instagram-float {
+        bottom: 75px;
+        right: 15px;
+        width: 45px;
+        height: 45px;
+    }
+    
+    .instagram-icon {
+        width: 23px;
+        height: 23px;
+    }
+    
     .whatsapp-float {
         bottom: 15px;
         right: 15px;
@@ -100,7 +169,7 @@
     
     /* Back to top button positioning on small mobile */
     .back-to-top {
-        bottom: 75px !important;
+        bottom: 135px !important;
         right: 15px !important;
     }
 }
