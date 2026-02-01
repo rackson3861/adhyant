@@ -7,7 +7,7 @@ export default function Service() {
   <div className="container">
     <div className="row g-4 align-items-stretch service-row-mobile">
       {/* JEE Preparation */}
-      <div className="col-lg-3 col-sm-6 col-6 wow fadeInUp d-flex" data-wow-delay="0.1s" style={{ flex: '0 0 50%', maxWidth: '50%', width: '50%' }}>
+      <div className="col-lg-3 col-sm-6 service-card-mobile wow fadeInUp d-flex" data-wow-delay="0.1s">
         <div className="service-item text-center pt-3 w-100">
           <div className="p-4" style={{ cursor: 'default' }}>
             <i className="fa fa-3x fa-lightbulb text-primary mb-4" />
@@ -18,7 +18,7 @@ export default function Service() {
       </div>
 
       {/* NEET Preparation */}
-      <div className="col-lg-3 col-sm-6 col-6 wow fadeInUp d-flex" data-wow-delay="0.3s" style={{ flex: '0 0 50%', maxWidth: '50%', width: '50%' }}>
+      <div className="col-lg-3 col-sm-6 service-card-mobile wow fadeInUp d-flex" data-wow-delay="0.3s">
         <div className="service-item text-center pt-3 w-100">
           <div className="p-4" style={{ cursor: 'default' }}>
             <i className="fa fa-3x fa-heartbeat text-primary mb-4" />
@@ -31,7 +31,7 @@ export default function Service() {
       </div>
 
       {/* Foundation */}
-      <div className="col-lg-3 col-sm-6 col-6 wow fadeInUp d-flex" data-wow-delay="0.5s" style={{ flex: '0 0 50%', maxWidth: '50%', width: '50%' }}>
+      <div className="col-lg-3 col-sm-6 service-card-mobile wow fadeInUp d-flex" data-wow-delay="0.5s">
         <div className="service-item text-center pt-3 w-100">
           <div className="p-4" style={{ cursor: 'default' }}>
             <i className="fa fa-3x fa-seedling text-primary mb-4" />
@@ -43,7 +43,7 @@ export default function Service() {
       </div>
 
       {/* Career Counselling */}
-      <div className="col-lg-3 col-sm-6 col-6 wow fadeInUp d-flex" data-wow-delay="0.7s" style={{ flex: '0 0 50%', maxWidth: '50%', width: '50%' }}>
+      <div className="col-lg-3 col-sm-6 service-card-mobile wow fadeInUp d-flex" data-wow-delay="0.7s">
         <div className="service-item text-center pt-3 w-100">
           <div className="p-4" style={{ cursor: 'default' }}>
             <i className="fa fa-3x fa-rocket text-primary mb-4" />
