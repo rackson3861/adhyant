@@ -11,37 +11,48 @@ export default function Slide() {
     const el = document.getElementById("carouselExampleControlsNoTouching");
     const bootstrap = window.bootstrap;
     if (!el || !bootstrap || !bootstrap.Carousel) return;
-    let instance = bootstrap.Carousel.getInstance
-      ? bootstrap.Carousel.getInstance(el)
-      : null;
-    if (!instance) {
-      instance = new bootstrap.Carousel(el, {
-        interval: 3000,
-        pause: false,
-        ride: "carousel",
-        touch: false,
-        wrap: true,
-      });
+    
+    // Dispose existing instance if any
+    let instance = bootstrap.Carousel.getInstance(el);
+    if (instance) {
+      instance.dispose();
     }
-    instance.cycle && instance.cycle();
+    
+    // Create new instance with autoplay
+    instance = new bootstrap.Carousel(el, {
+      interval: 3500,
+      pause: false,
+      ride: 'carousel',
+      touch: true,
+      wrap: true
+    });
+    
+    // Force start cycling
+    setTimeout(() => {
+      if (instance && instance.cycle) {
+        instance.cycle();
+      }
+    }, 100);
+    
     return () => {
-      instance && instance.dispose && instance.dispose();
+      if (instance && instance.dispose) {
+        instance.dispose();
+      }
     };
   }, []);
   return (
-    <>
+    <div style={{ marginTop: 0, paddingTop: 0, position: 'relative', zIndex: 1 }}>
       <div
         id="carouselExampleControlsNoTouching"
-        className="carousel slide"
-        data-bs-touch="false"
+        className="carousel slide carousel-fade"
         data-bs-ride="carousel"
-        data-bs-interval="20000"
+        data-bs-interval="3500"
         data-bs-pause="false"
       >
         <div className="carousel-inner">
           <div className="carousel-item active">
             <div className="owl-carousel-item position-relative">
-              <img className="img-fluid" src="/img/imagescroller12.svg" alt="" />
+              <img className="img-fluid" src="/img/imagescroller12.svg" alt="Adhyant Coaching" loading="eager" fetchpriority="high" />
               <div
                 className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center"
               >
@@ -71,7 +82,7 @@ export default function Slide() {
                         >
                           Join Now<i className="fa fa-arrow-right ms-3"></i>
                         </button>
-                        <p className="flashing-text text-warning fw-bold mt-3 mb-0" style={{ fontSize: '1.2rem' }}>
+                        <p className="flashing-text text-warning fw-bold mt-3 mb-0">
                           Batch Starting in April 2026
                         </p>
                       </div>
@@ -86,7 +97,7 @@ export default function Slide() {
 
           <div className="carousel-item">
             <div className="owl-carousel-item position-relative">
-              <img className="img-fluid" src="/img/imagescroller12.svg" alt="" />
+              <img className="img-fluid" src="/img/imagescroller12.svg" alt="Adhyant IIT Coaching" loading="lazy" />
               <div
                 className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center"
               >
@@ -118,11 +129,11 @@ export default function Slide() {
                         </div>
                         <button
                           onClick={() => setIsModalOpen(true)}
-                          className="btn btn-yellow rounded-pill py-md-3 px-md-4 fw-bold animated slideInRight flashing-button"
+                          className="btn btn-yellow rounded-pill py-2 px-3 py-md-3 px-md-4 fw-bold animated slideInRight flashing-button"
                         >
-                          Join Now<i className="fa fa-arrow-right ms-3"></i>
+                          Join Now<i className="fa fa-arrow-right ms-2"></i>
                         </button>
-                        <p className="flashing-text text-warning fw-bold mt-3 mb-0" style={{ fontSize: '1.2rem' }}>
+                        <p className="flashing-text text-warning fw-bold mt-2 mb-0">
                           Batch Starting in April 2026
                         </p>
                       </div>
@@ -183,6 +194,6 @@ export default function Slide() {
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
       />
-    </>
+    </div>
   );
 }
