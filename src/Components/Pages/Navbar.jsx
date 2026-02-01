@@ -19,18 +19,18 @@ export default function Navbar() {
 
   return (
     <>
-      <nav className="navbar navbar-expand-lg bg-white navbar-light shadow sticky-top p-0">
+      <nav className="navbar navbar-expand-lg navbar-dark shadow sticky-top p-0 adhyant-navbar">
         <Link
           to="/"
           className="navbar-brand d-flex align-items-center px-4 px-lg-5"
         >
-          <h2 className="m-0 text-primary fw-bold">
-            <i className="fa fa-book me-3"></i>ADHYANT
+          <h2 className="m-0 fw-bold text-white">
+            <i className="fa fa-book me-3 text-white"></i>ADHYANT
           </h2>
         </Link>
         <button
           type="button"
-          className="navbar-toggler me-4"
+          className="navbar-toggler me-4 text-white"
           data-bs-toggle="collapse"
           data-bs-target="#navbarCollapse"
         >

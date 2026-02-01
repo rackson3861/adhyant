@@ -41,7 +41,7 @@ export default function Slide() {
         <div className="carousel-inner">
           <div className="carousel-item active">
             <div className="owl-carousel-item position-relative">
-              <img src="/img/imagescroller12.svg" alt="" />
+              <img className="img-fluid" src="/img/imagescroller12.svg" alt="" />
               <div
                 className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center"
               >
