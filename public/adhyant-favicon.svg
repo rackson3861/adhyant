@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Gradient definition for a modern look -->
+  <defs>
+    <linearGradient id="blueGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#60a5fa;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#3b82f6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1e40af;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  
+  <!-- Cool modern "A" letter -->
+  <path d="M 50 15 L 75 85 L 62 85 L 57 70 L 43 70 L 38 85 L 25 85 L 50 15 Z M 54 60 L 50 40 L 46 60 Z" 
+        fill="url(#blueGradient)" 
+        filter="url(#shadow)"
+        stroke="#1e40af" 
+        stroke-width="1"/>
+</svg>
