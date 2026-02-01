@@ -1,11 +1,285 @@
 .carousel-inner{
     width: 100%;
+    overflow: visible !important;
 }
-.slide img{
+
+.carousel-item {
+    overflow: visible !important;
+}
+
+.carousel.slide {
+    margin-bottom: 0;
+}
+
+.owl-carousel-item {
+    position: relative;
     width: 100%;
-    height: 60vh;
-    object-fit: cover;
+    height: auto;
 }
+
+.owl-carousel-item img {
+    width: 100%;
+    height: auto;
+    display: block;
+    max-height: 90vh;
+    object-fit: contain;
+    object-position: center;
+}
+
 .carousel-control-prev{
     left: -4%;
+}
+
+/* Responsive slide content */
+.slide-text-up h6 {
+    font-size: 1rem;
+}
+
+.slide-text-up h1 {
+    font-size: 2.5rem;
+    line-height: 1.2;
+}
+
+.slide-text-up p {
+    font-size: 1.1rem;
+}
+
+.slide-text-up .btn {
+    font-size: 1rem;
+    padding: 0.75rem 1.5rem;
+}
+
+.slide-text-up .flashing-text {
+    font-size: 1.2rem;
+}
+
+/* Tablet adjustments */
+@media (max-width: 991px) {
+    .owl-carousel-item img {
+        max-height: 70vh;
+    }
+    
+    .slide-text-up {
+        padding: 0 15px;
+    }
+    
+    .slide-text-up h6 {
+        font-size: 0.85rem;
+        margin-bottom: 0.5rem !important;
+    }
+    
+    .slide-text-up h1 {
+        font-size: 2rem !important;
+        line-height: 1.2;
+        margin-bottom: 1rem !important;
+    }
+    
+    .slide-text-up .hero-kpi {
+        font-size: 2rem;
+    }
+    
+    .slide-text-up .hero-kpi-sub {
+        font-size: 1.2rem;
+    }
+    
+    .slide-text-up p {
+        font-size: 0.95rem !important;
+        margin-bottom: 1rem !important;
+    }
+    
+    .slide-text-up .btn {
+        font-size: 0.9rem;
+        padding: 0.65rem 1.25rem !important;
+    }
+    
+    .slide-text-up .flashing-text {
+        font-size: 1rem !important;
+        margin-top: 0.75rem !important;
+    }
+    
+    .label-dashed {
+        font-size: 0.75rem;
+        padding: 0.3rem 0.6rem !important;
+    }
+}
+
+/* Mobile adjustments */
+@media (max-width: 767px) {
+    .carousel.slide {
+        margin-top: 0;
+        margin-bottom: 0;
+        position: relative;
+        top: -50px;
+    }
+    
+    .owl-carousel-item img {
+        max-height: 60vh;
+        min-height: 400px;
+    }
+    
+    .slide-text-up {
+        padding: 0 10px !important;
+        max-width: 100%;
+        overflow: visible !important;
+        padding-top: 85px !important;
+    }
+    
+    .position-absolute.d-flex.align-items-center {
+        padding-top: 0;
+        padding-bottom: 0.25rem;
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+        overflow: visible !important;
+    }
+    
+    .slide-text-up h6 {
+        font-size: 0.65rem !important;
+        margin-bottom: 0.3rem !important;
+        line-height: 1.2;
+    }
+    
+    .slide-text-up h1 {
+        font-size: 1.3rem !important;
+        line-height: 1.2;
+        margin-bottom: 0.5rem !important;
+        word-wrap: break-word;
+    }
+    
+    .slide-text-up .hero-kpi {
+        font-size: 1.3rem !important;
+    }
+    
+    .slide-text-up .hero-kpi-sub {
+        font-size: 0.8rem !important;
+    }
+    
+    .slide-text-up p {
+        font-size: 0.75rem !important;
+        margin-bottom: 0.5rem !important;
+        line-height: 1.3;
+    }
+    
+    .slide-text-up .btn {
+        font-size: 0.75rem !important;
+        padding: 0.4rem 0.8rem !important;
+        white-space: nowrap;
+    }
+    
+    .slide-text-up .flashing-text {
+        font-size: 0.75rem !important;
+        margin-top: 0.4rem !important;
+        line-height: 1.2;
+    }
+    
+    .label-dashed {
+        font-size: 0.6rem !important;
+        padding: 0.2rem 0.4rem !important;
+        margin-bottom: 0.4rem !important;
+    }
+    
+    .hero-cta-group {
+        margin-top: 0.3rem;
+        width: 100%;
+        max-width: 100%;
+    }
+    
+    .hero-cta-group .d-flex {
+        margin-bottom: 0.4rem !important;
+        gap: 0.3rem !important;
+    }
+    
+    .hero-cta-group .btn {
+        width: auto;
+        max-width: 100%;
+    }
+}
+
+/* Extra small mobile */
+@media (max-width: 575px) {
+    .carousel.slide {
+        margin-top: 0;
+        margin-bottom: 0;
+        position: relative;
+        top: -50px;
+    }
+    
+    .owl-carousel-item img {
+        max-height: 55vh;
+        min-height: 350px;
+    }
+    
+    .slide-text-up {
+        padding-top: 90px !important;
+    }
+    
+    .position-absolute.d-flex.align-items-center {
+        padding-top: 0;
+        padding-bottom: 0.25rem;
+        padding-left: 0.25rem;
+        padding-right: 0.25rem;
+        overflow: visible !important;
+    }
+}
+
+/* Very small devices */
+@media (max-width: 400px) {
+    .slide-text-up {
+        padding-top: 95px !important;
+    }
+}
+
+@media (max-width: 360px) {
+    .slide-text-up {
+        padding-top: 100px !important;
+    }
+}
+
+/* Flashing animation for Join Now button */
+@keyframes flashButton {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 0 20px rgba(255, 193, 7, 0.6);
+    }
+    50% {
+        transform: scale(1.05);
+        box-shadow: 0 0 30px rgba(255, 193, 7, 0.9), 0 0 40px rgba(255, 193, 7, 0.6);
+    }
+}
+
+.flashing-button {
+    animation: flashButton 2s ease-in-out infinite;
+}
+
+/* Flashing animation for text */
+@keyframes flashText {
+    0%, 100% {
+        opacity: 1;
+        text-shadow: 0 0 10px rgba(255, 193, 7, 0.8);
+    }
+    50% {
+        opacity: 0.7;
+        text-shadow: 0 0 20px rgba(255, 193, 7, 1), 0 0 30px rgba(255, 193, 7, 0.8);
+    }
+}
+
+.flashing-text {
+    animation: flashText 1.5s ease-in-out infinite;
+}
+
+/* Flashing animation for blue button (Contact Us) */
+@keyframes flashButtonBlue {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 0 20px rgba(2, 57, 151, 0.6);
+        background-color: #023997;
+    }
+    50% {
+        transform: scale(1.05);
+        box-shadow: 0 0 30px rgba(6, 187, 204, 0.9), 0 0 40px rgba(2, 57, 151, 0.6);
+        background-color: #0558d4;
+    }
+}
+
+.flashing-button-blue {
+    animation: flashButtonBlue 2s ease-in-out infinite;
 }

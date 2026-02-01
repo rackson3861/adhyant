@@ -3,12 +3,12 @@ import React from 'react'
 export default function Service() {
   return (
     <>
-     <div className="container-xxl py-5">
+     <div className="container-xxl service-section">
   <div className="container">
-    <div className="row g-4">
+    <div className="row g-4 align-items-stretch">
       {/* JEE Preparation */}
-      <div className="col-lg-3 col-sm-6 wow fadeInUp" data-wow-delay="0.1s">
-        <div className="service-item text-center pt-3">
+      <div className="col-lg-3 col-sm-6 wow fadeInUp d-flex" data-wow-delay="0.1s">
+        <div className="service-item text-center pt-3 w-100">
           <div className="p-4" style={{ cursor: 'default' }}>
             <i className="fa fa-3x fa-lightbulb text-primary mb-4" />
             <h5 className="mb-3">IIT-JEE Preparation</h5>
@@ -18,8 +18,8 @@ export default function Service() {
       </div>
 
       {/* NEET Preparation */}
-      <div className="col-lg-3 col-sm-6 wow fadeInUp" data-wow-delay="0.3s">
-        <div className="service-item text-center pt-3">
+      <div className="col-lg-3 col-sm-6 wow fadeInUp d-flex" data-wow-delay="0.3s">
+        <div className="service-item text-center pt-3 w-100">
           <div className="p-4" style={{ cursor: 'default' }}>
             <i className="fa fa-3x fa-heartbeat text-primary mb-4" />
             <h5 className="mb-3">NEET Preparation</h5>
@@ -31,8 +31,8 @@ export default function Service() {
       </div>
 
       {/* Foundation */}
-      <div className="col-lg-3 col-sm-6 wow fadeInUp" data-wow-delay="0.5s">
-        <div className="service-item text-center pt-3">
+      <div className="col-lg-3 col-sm-6 wow fadeInUp d-flex" data-wow-delay="0.5s">
+        <div className="service-item text-center pt-3 w-100">
           <div className="p-4" style={{ cursor: 'default' }}>
             <i className="fa fa-3x fa-seedling text-primary mb-4" />
             <h5 className="mb-3">Foundation</h5>
@@ -43,8 +43,8 @@ export default function Service() {
       </div>
 
       {/* Career Counselling */}
-      <div className="col-lg-3 col-sm-6 wow fadeInUp" data-wow-delay="0.7s">
-        <div className="service-item text-center pt-3">
+      <div className="col-lg-3 col-sm-6 wow fadeInUp d-flex" data-wow-delay="0.7s">
+        <div className="service-item text-center pt-3 w-100">
           <div className="p-4" style={{ cursor: 'default' }}>
             <i className="fa fa-3x fa-rocket text-primary mb-4" />
             <h5 className="mb-3">Career Counselling</h5>

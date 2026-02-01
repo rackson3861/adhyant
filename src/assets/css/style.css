@@ -192,11 +192,85 @@
     .navbar-light .navbar-nav {
         border-top: 1px solid #EEEEEE;
     }
+    
+    /* Make navbar menu overlay on mobile */
+    .navbar-collapse {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        z-index: 1050;
+        max-height: 80vh;
+        overflow-y: auto;
+    }
+    
+    .navbar-collapse.collapsing,
+    .navbar-collapse.show {
+        display: block !important;
+    }
+    
+    .navbar-collapse:not(.show) {
+        display: none;
+    }
+}
+
+/* Mobile navbar adjustments */
+@media (max-width: 767px) {
+    .navbar-light .navbar-brand,
+    .navbar-light a.btn,
+    .navbar-dark .navbar-brand,
+    .navbar-dark a.btn {
+        height: 50px;
+    }
+    
+    .adhyant-navbar .navbar-brand h2 {
+        font-size: 1.3rem !important;
+    }
+    
+    .adhyant-navbar .navbar-brand i {
+        font-size: 1.1rem !important;
+    }
+    
+    .adhyant-navbar .navbar-brand {
+        padding: 0.5rem 1rem !important;
+    }
+    
+    .adhyant-navbar {
+        padding: 0 !important;
+    }
 }
 
 .navbar-light .navbar-brand,
 .navbar-light a.btn {
     height: 75px;
+}
+
+/* Adhyant navbar styling - entire line in blue */
+.adhyant-navbar {
+    background: var(--primary) !important;
+}
+
+.adhyant-navbar .navbar-toggler {
+    border-color: white !important;
+}
+
+.adhyant-navbar .navbar-toggler-icon {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(255, 255, 255, 1)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e") !important;
+}
+
+.adhyant-navbar .navbar-collapse {
+    background: var(--primary);
+}
+
+.adhyant-navbar .navbar-nav .nav-link {
+    color: white !important;
+}
+
+.adhyant-navbar .navbar-nav .nav-link:hover,
+.adhyant-navbar .navbar-nav .nav-link.active {
+    color: #FFC107 !important;
 }
 
 .navbar-light .navbar-nav .nav-link {
@@ -336,6 +410,11 @@
 
 
 /*** Service ***/
+.service-section {
+    padding-top: 3rem;
+    padding-bottom: 3rem;
+}
+
 .service-item {
     background: var(--service-bg);
     transition: .5s;
@@ -352,6 +431,91 @@
 
 .service-item:hover * {
     color: var(--light) !important;
+}
+
+/* Service section responsive */
+@media (max-width: 991px) {
+    .service-section {
+        padding-top: 1.5rem;
+        padding-bottom: 2.5rem;
+    }
+}
+
+@media (max-width: 767px) {
+    .service-section {
+        padding-top: 1px;
+        padding-bottom: 2rem;
+        margin-top: -50px;
+    }
+    
+    .service-item {
+        margin-bottom: 0.5rem;
+        min-height: 200px;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .service-item .p-4 {
+        padding: 1.5rem 1rem !important;
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        justify-content: flex-start;
+    }
+    
+    .service-item i {
+        font-size: 2rem !important;
+        margin-bottom: 0.75rem !important;
+    }
+    
+    .service-item h5 {
+        font-size: 1rem !important;
+        margin-bottom: 0.5rem !important;
+        min-height: 2.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .service-item p {
+        font-size: 0.85rem !important;
+        line-height: 1.4;
+        margin-bottom: 0 !important;
+        flex: 1;
+    }
+}
+
+@media (max-width: 575px) {
+    .service-section {
+        padding-top: 1px;
+        padding-bottom: 1.5rem;
+        margin-top: -50px;
+    }
+    
+    .service-item {
+        min-height: 220px;
+        margin-bottom: 0.25rem;
+    }
+    
+    .service-item .p-4 {
+        padding: 1rem 0.75rem !important;
+    }
+    
+    .service-item i {
+        font-size: 1.75rem !important;
+        margin-bottom: 0.5rem !important;
+    }
+    
+    .service-item h5 {
+        font-size: 0.9rem !important;
+        margin-bottom: 0.4rem !important;
+        min-height: 2.2rem;
+    }
+    
+    .service-item p {
+        font-size: 0.8rem !important;
+        line-height: 1.3;
+    }
 }
 
 
@@ -374,6 +538,36 @@
 
 .team-item:hover img {
     transform: scale(1.1);
+}
+
+/* Team responsive - 2 cards per row on mobile */
+@media (max-width: 767px) {
+    .team-item {
+        margin-bottom: 1rem;
+    }
+    
+    .team-item img {
+        max-height: 250px;
+        object-fit: cover;
+    }
+    
+    .team-item .p-4 {
+        padding: 1rem !important;
+    }
+    
+    .team-item h5 {
+        font-size: 0.95rem !important;
+    }
+    
+    .team-item small {
+        font-size: 0.75rem !important;
+    }
+    
+    .team-item .btn-sm-square {
+        width: 28px !important;
+        height: 28px !important;
+        font-size: 0.75rem !important;
+    }
 }
 
 /* Team social icons: dark blue icons on light background */

@@ -11,9 +11,9 @@ export default function Team() {
             </h6>
           <h1 className="mb-5">Expert Faculties</h1>
           </div>
-          <div className="row g-4">
+          <div className="row g-4 justify-content-center">
             <div
-              className="col-lg-3 col-md-6 wow fadeInUp"
+              className="col-lg-3 col-md-6 col-6 wow fadeInUp"
               data-wow-delay="0.1s"
             >
               <div className="team-item" style={{ backgroundColor: "var(--service-bg)" }}>
@@ -44,7 +44,7 @@ export default function Team() {
               </div>
             </div>
             <div
-              className="col-lg-3 col-md-6 wow fadeInUp"
+              className="col-lg-3 col-md-6 col-6 wow fadeInUp"
               data-wow-delay="0.3s"
             >
               <div className="team-item" style={{ backgroundColor: "var(--service-bg)" }}>
@@ -75,7 +75,7 @@ export default function Team() {
               </div>
             </div>
             <div
-              className="col-lg-3 col-md-6 wow fadeInUp"
+              className="col-lg-3 col-md-6 col-6 wow fadeInUp"
               data-wow-delay="0.5s"
             >
               <div className="team-item" style={{ backgroundColor: "var(--service-bg)" }}>
@@ -106,7 +106,7 @@ export default function Team() {
               </div>
             </div>
             <div
-              className="col-lg-3 col-md-6 wow fadeInUp"
+              className="col-lg-3 col-md-6 col-6 wow fadeInUp"
               data-wow-delay="0.7s"
             >
               <div className="team-item" style={{ backgroundColor: "var(--service-bg)" }}>
@@ -137,14 +137,15 @@ export default function Team() {
               </div>
             </div>
           </div>
+          
           <div className="text-center wow fadeInUp" data-wow-delay="0.1s">
-          <br/>
-          <h1 className="mb-5">Expert Mentors</h1>
+            <br/>
+            <h1 className="mb-5">Expert Mentors</h1>
           </div>
-          </div>
-          <div className="row g-4">
+          
+          <div className="row g-4 justify-content-center">
             <div
-              className="col-lg-3 col-md-6 wow fadeInUp"
+              className="col-lg-3 col-md-6 col-6 wow fadeInUp"
               data-wow-delay="0.1s"
             >
               <div className="team-item" style={{ backgroundColor: "var(--service-bg)" }}>
@@ -176,7 +177,7 @@ export default function Team() {
               </div>
             </div>
             <div
-              className="col-lg-3 col-md-6 wow fadeInUp"
+              className="col-lg-3 col-md-6 col-6 wow fadeInUp"
               data-wow-delay="0.3s"
             >
               <div className="team-item" style={{ backgroundColor: "var(--service-bg)" }}>
@@ -207,7 +208,7 @@ export default function Team() {
               </div>
             </div>
             <div
-              className="col-lg-3 col-md-6 wow fadeInUp"
+              className="col-lg-3 col-md-6 col-6 wow fadeInUp"
               data-wow-delay="0.5s"
             >
               <div className="team-item" style={{ backgroundColor: "var(--service-bg)" }}>
@@ -238,7 +239,7 @@ export default function Team() {
               </div>
             </div>
             <div
-              className="col-lg-3 col-md-6 wow fadeInUp"
+              className="col-lg-3 col-md-6 col-6 wow fadeInUp"
               data-wow-delay="0.7s"
             >
               <div className="team-item" style={{ backgroundColor: "var(--service-bg)" }}>
@@ -269,7 +270,7 @@ export default function Team() {
                 </div>
               </div>
             </div>
-
+          </div>
         </div>
       </div>
     </>

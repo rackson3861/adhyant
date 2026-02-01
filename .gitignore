@@ -3,3 +3,5 @@ node_modules/
 
 # Lock file (NOT recommended usually, but if you want to ignore it)
 package-lock.json
+
+dist/

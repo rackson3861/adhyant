@@ -168,7 +168,6 @@ export default function Team1() {
             </div> */}
 
     <Team/>
-    <Team/>
 
     <Footer/>
     </>

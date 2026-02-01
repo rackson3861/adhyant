@@ -5,7 +5,6 @@ import Home from "./Components/Pages/Home";
 import About1 from "./Components/Routes/About1";
 import Courses1 from "./Components/Routes/Courses1";
 import Team1 from "./Components/Routes/Team1";
-import Testimonial1 from "./Components/Routes/Testimonial1";
 import Contact1 from "./Components/Routes/Contact1";
 import ErrorPage from "./Components/Pages/ErrorPage";
 import Sign from "./Components/Pages/Sign";
@@ -17,6 +16,8 @@ import Fullstack from "./Components/Course/Fullstack";
 import Programming from "./Components/Course/Programming";
 import ShowBook from "./Components/Ebook/ShowBook";
 import WhatsAppButton from "./Components/Pages/WhatsAppButton";
+import InstagramButton from "./Components/Pages/InstagramButton";
+import InfoButton from "./Components/Pages/InfoButton";
 import Reactjs from "./Components/Course/Reactjs";
 import Express from "./Components/Course/Express";
 import Nodejs from "./Components/Course/Nodejs";
@@ -33,8 +34,6 @@ import JavascriptQuiz from "./Components/Quiz/JavascriptQuiz";
 import ReactQuiz from "./Components/Quiz/ReactQuiz";
 import Profile from "./Components/Pages/Profile";
 import { useAuth0 } from "@auth0/auth0-react";
-import Feedback from "./Components/Pages/Feedback";
-import FeedbackAll from "./Components/Pages/FeedbackAll";
 
 function App() {
   const { loginWithRedirect } = useAuth0();
@@ -46,7 +45,6 @@ function App() {
           <Route path="/about" element={<About1 />} />
           <Route path="/courses" element={<Courses1 />} />
           <Route path="/team" element={<Team1 />} />
-          <Route path="/testimonial" element={<Testimonial1 />} />
           <Route path="/contact" element={<Contact1 />} />
           <Route path="/error" element={<ErrorPage />} />
           <Route
@@ -95,13 +93,13 @@ function App() {
           />
 
           <Route path="/library" element={<ShowBook />} />
-          {/* <Route path="/feedback/new" element={<Feedback />} /> */}
-          <Route path="/feedback" element={<FeedbackAll />} />
 
           <Route path="*" element={<ErrorPage />} />
         </Routes>
+        <InfoButton />
+        <InstagramButton />
+        <WhatsAppButton />
       </BrowserRouter>
-      <WhatsAppButton />
     </>
   );
 }

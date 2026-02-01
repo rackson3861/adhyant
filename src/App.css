@@ -18,9 +18,111 @@
     color: black;
 }
 
+/* Info Floating Button */
+.info-float {
+    position: fixed !important;
+    bottom: 190px;
+    right: 30px;
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, #023997 0%, #0558d4 100%);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    text-align: center;
+    font-size: 30px;
+    box-shadow: 0 4px 20px rgba(2, 57, 151, 0.5);
+    z-index: 99999 !important;
+    transition: all 0.3s ease;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    animation: pulseInfo 2s infinite;
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+    transform: none !important;
+    will-change: transform;
+}
+
+.info-float:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 30px rgba(2, 57, 151, 0.7);
+    background: linear-gradient(135deg, #0558d4 0%, #023997 100%);
+}
+
+.info-icon {
+    width: 34px;
+    height: 34px;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+@keyframes pulseInfo {
+    0% {
+        box-shadow: 0 4px 20px rgba(2, 57, 151, 0.5);
+    }
+    50% {
+        box-shadow: 0 4px 20px rgba(2, 57, 151, 0.8), 0 0 0 10px rgba(2, 57, 151, 0);
+    }
+    100% {
+        box-shadow: 0 4px 20px rgba(2, 57, 151, 0.5);
+    }
+}
+
+/* Instagram Floating Button */
+.instagram-float {
+    position: fixed !important;
+    bottom: 110px;
+    right: 30px;
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(45deg, #c7581f 0%, #b43d24 25%, #a01835 50%, #8b1a4d 75%, #6d0f5e 100%);
+    color: white;
+    border-radius: 50%;
+    text-align: center;
+    font-size: 30px;
+    box-shadow: 0 4px 20px rgba(160, 24, 53, 0.5);
+    z-index: 99999 !important;
+    transition: all 0.3s ease;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    animation: pulseInstagram 2s infinite;
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+    transform: none !important;
+    will-change: transform;
+}
+
+.instagram-float:hover {
+    transform: scale(1.1) rotate(5deg);
+    box-shadow: 0 6px 30px rgba(160, 24, 53, 0.7);
+}
+
+.instagram-icon {
+    width: 32px;
+    height: 32px;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+@keyframes pulseInstagram {
+    0% {
+        box-shadow: 0 4px 20px rgba(160, 24, 53, 0.5);
+    }
+    50% {
+        box-shadow: 0 4px 20px rgba(160, 24, 53, 0.8), 0 0 0 10px rgba(160, 24, 53, 0);
+    }
+    100% {
+        box-shadow: 0 4px 20px rgba(160, 24, 53, 0.5);
+    }
+}
+
 /* WhatsApp Floating Button */
 .whatsapp-float {
-    position: fixed;
+    position: fixed !important;
     bottom: 30px;
     right: 30px;
     width: 60px;
@@ -31,13 +133,18 @@
     text-align: center;
     font-size: 30px;
     box-shadow: 0 4px 20px rgba(37, 211, 102, 0.4);
-    z-index: 1000;
+    z-index: 99999 !important;
     transition: all 0.3s ease;
-    display: flex;
+    display: flex !important;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     animation: pulse 2s infinite;
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+    transform: none !important;
+    will-change: transform;
 }
 
 .whatsapp-float:hover {
@@ -66,41 +173,136 @@
 
 /* Mobile responsive */
 @media screen and (max-width: 768px) {
+    .info-float {
+        bottom: 130px;
+        right: 15px;
+        width: 45px;
+        height: 45px;
+    }
+    
+    .info-icon {
+        width: 24px;
+        height: 24px;
+    }
+    
+    .instagram-float {
+        bottom: 75px;
+        right: 15px;
+        width: 45px;
+        height: 45px;
+    }
+    
+    .instagram-icon {
+        width: 22px;
+        height: 22px;
+    }
+    
     .whatsapp-float {
         bottom: 20px;
-        right: 20px;
-        width: 50px;
-        height: 50px;
-    }
-    
-    .whatsapp-icon {
-        width: 28px;
-        height: 28px;
-    }
-    
-    /* Back to top button positioning on mobile */
-    .back-to-top {
-        bottom: 90px !important;
-        right: 20px !important;
-    }
-}
-
-@media screen and (max-width: 576px) {
-    .whatsapp-float {
-        bottom: 15px;
         right: 15px;
         width: 45px;
         height: 45px;
     }
     
     .whatsapp-icon {
-        width: 25px;
-        height: 25px;
+        width: 24px;
+        height: 24px;
+    }
+    
+    /* Back to top button positioning on mobile */
+    .back-to-top {
+        bottom: 185px !important;
+        right: 15px !important;
+    }
+}
+
+@media screen and (max-width: 576px) {
+    .info-float {
+        bottom: 115px;
+        right: 12px;
+        width: 40px;
+        height: 40px;
+    }
+    
+    .info-icon {
+        width: 22px;
+        height: 22px;
+    }
+    
+    .instagram-float {
+        bottom: 68px;
+        right: 12px;
+        width: 40px;
+        height: 40px;
+    }
+    
+    .instagram-icon {
+        width: 20px;
+        height: 20px;
+    }
+    
+    .whatsapp-float {
+        bottom: 18px;
+        right: 12px;
+        width: 40px;
+        height: 40px;
+    }
+    
+    .whatsapp-icon {
+        width: 22px;
+        height: 22px;
     }
     
     /* Back to top button positioning on small mobile */
     .back-to-top {
-        bottom: 75px !important;
-        right: 15px !important;
+        bottom: 165px !important;
+        right: 12px !important;
+        width: 35px !important;
+        height: 35px !important;
+    }
+}
+
+@media screen and (max-width: 400px) {
+    .info-float {
+        bottom: 110px;
+        right: 10px;
+        width: 38px;
+        height: 38px;
+    }
+    
+    .info-icon {
+        width: 20px;
+        height: 20px;
+    }
+    
+    .instagram-float {
+        bottom: 64px;
+        right: 10px;
+        width: 38px;
+        height: 38px;
+    }
+    
+    .instagram-icon {
+        width: 18px;
+        height: 18px;
+    }
+    
+    .whatsapp-float {
+        bottom: 16px;
+        right: 10px;
+        width: 38px;
+        height: 38px;
+    }
+    
+    .whatsapp-icon {
+        width: 20px;
+        height: 20px;
+    }
+    
+    .back-to-top {
+        bottom: 158px !important;
+        right: 10px !important;
+        width: 32px !important;
+        height: 32px !important;
     }
 }

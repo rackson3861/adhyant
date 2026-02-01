@@ -1,8 +1,11 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import "../../assets/css/Slide.css";
 import { Link } from "react-router-dom";
+import RegistrationModal from "./RegistrationModal";
 
 export default function Slide() {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const el = document.getElementById("carouselExampleControlsNoTouching");
@@ -38,7 +41,7 @@ export default function Slide() {
         <div className="carousel-inner">
           <div className="carousel-item active">
             <div className="owl-carousel-item position-relative">
-              <img src="/img/imagescroller12.svg" alt="" />
+              <img className="img-fluid" src="/img/imagescroller12.svg" alt="" />
               <div
                 className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center"
               >
@@ -62,12 +65,15 @@ export default function Slide() {
                           <span className="label-dashed">ADMISSION OPEN 2026</span>
                           <span className="label-dashed">LIMITED SEATS</span>
                         </div>
-                        <Link
-                          to="/courses"
-                          className="btn btn-yellow rounded-pill py-md-3 px-md-4 fw-bold animated slideInRight"
+                        <button
+                          onClick={() => setIsModalOpen(true)}
+                          className="btn btn-yellow rounded-pill py-md-3 px-md-4 fw-bold animated slideInRight flashing-button"
                         >
                           Join Now<i className="fa fa-arrow-right ms-3"></i>
-                        </Link>
+                        </button>
+                        <p className="flashing-text text-warning fw-bold mt-3 mb-0" style={{ fontSize: '1.2rem' }}>
+                          Batch Starting in April 2026
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -110,12 +116,15 @@ export default function Slide() {
                           <span className="label-dashed">ADMISSION OPEN 2026</span>
                           <span className="label-dashed">LIMITED SEATS</span>
                         </div>
-                        <Link
-                          to="/courses"
-                          className="btn btn-yellow rounded-pill py-md-3 px-md-4 fw-bold animated slideInRight"
+                        <button
+                          onClick={() => setIsModalOpen(true)}
+                          className="btn btn-yellow rounded-pill py-md-3 px-md-4 fw-bold animated slideInRight flashing-button"
                         >
                           Join Now<i className="fa fa-arrow-right ms-3"></i>
-                        </Link>
+                        </button>
+                        <p className="flashing-text text-warning fw-bold mt-3 mb-0" style={{ fontSize: '1.2rem' }}>
+                          Batch Starting in April 2026
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -169,6 +178,11 @@ export default function Slide() {
           <span className="visually-hidden">Next</span>
         </button>
       </div>
+      
+      <RegistrationModal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+      />
     </>
   );
 }
