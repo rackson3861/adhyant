@@ -24,8 +24,8 @@
 .back-to-top {
     position: fixed;
     display: none;
-    right: 30px;
-    bottom: 110px;
+    right: 45px;
+    bottom: 5px;
     z-index: 99;
     border-radius: 4px;
     /* height: 35px;
@@ -120,6 +120,44 @@
     box-shadow: 0 0 0 .25rem rgba(255, 193, 7, .25);
 }
 
+/* Dashed label box for hero slide */
+.label-dashed {
+    display: inline-block;
+    padding: .375rem .75rem;
+    border: 2px dashed #FFC107;
+    border-radius: .5rem;
+    line-height: 1.2;
+}
+
+/* Group labels and button so button matches labels width */
+.hero-cta-group {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    width: fit-content;
+}
+.hero-cta-group .btn {
+    width: 100%;
+}
+
+/* Headline KPI styles: big yellow numbers + smaller trailing text on same baseline */
+.hero-kpi {
+    color: #FFC107;
+    font-weight: 700;
+    font-size: 1em; /* inherit h1 size */
+    line-height: 1;
+    display: inline-block;
+    vertical-align: baseline;
+}
+.hero-kpi-sub {
+    color: #FFFFFF;
+    font-weight: 600;
+    font-size: 0.6em; /* smaller than the main KPI */
+    line-height: 1;
+    display: inline-block;
+    vertical-align: baseline;
+    margin-left: 0.25em;
+}
 
 /*** Navbar ***/
 .navbar .dropdown-toggle::after {
