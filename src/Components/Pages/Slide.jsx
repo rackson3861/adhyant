@@ -1,8 +1,20 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import "../../assets/css/Slide.css";
 import { Link } from "react-router-dom";
+import RegistrationModal from "./RegistrationModal";
 
 export default function Slide() {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const handleAdmissionClick = (e) => {
+    e.preventDefault();
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+  };
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const el = document.getElementById("carouselExampleControlsNoTouching");
@@ -58,12 +70,12 @@ export default function Slide() {
                       IIT - JEE <span className="text-warning fw-bold">|</span> Medical <span className="text-warning fw-bold">|</span> Foundation <span className="text-warning fw-bold">|</span> Career Counselling
                     </p>
 
-                    <Link
-                        to="/courses"
+                    <button
+                        onClick={handleAdmissionClick}
                         className="btn btn-yellow rounded-pill py-md-3 px-md-4 fw-bold animated slideInRight"
                       >
                         ADMISSIONS OPEN 2026 | LIMITED SEATS
-                      </Link>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -101,12 +113,12 @@ export default function Slide() {
                       </ul>
                       <br/>
 
-                      <Link
-                        to="/courses"
+                      <button
+                        onClick={handleAdmissionClick}
                         className="btn btn-yellow rounded-pill py-md-3 px-md-4 fw-bold animated slideInRight"
                       >
                         ADMISSIONS OPEN 2026 | LIMITED SEATS
-                      </Link>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -242,6 +254,8 @@ export default function Slide() {
           <span className="visually-hidden">Next</span>
         </button>
       </div>
+      
+      <RegistrationModal isOpen={isModalOpen} onClose={handleCloseModal} />
     </>
   );
 }

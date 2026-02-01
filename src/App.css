@@ -77,4 +77,30 @@
         width: 28px;
         height: 28px;
     }
+    
+    /* Back to top button positioning on mobile */
+    .back-to-top {
+        bottom: 90px !important;
+        right: 20px !important;
+    }
+}
+
+@media screen and (max-width: 576px) {
+    .whatsapp-float {
+        bottom: 15px;
+        right: 15px;
+        width: 45px;
+        height: 45px;
+    }
+    
+    .whatsapp-icon {
+        width: 25px;
+        height: 25px;
+    }
+    
+    /* Back to top button positioning on small mobile */
+    .back-to-top {
+        bottom: 75px !important;
+        right: 15px !important;
+    }
 }

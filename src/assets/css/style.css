@@ -24,8 +24,8 @@
 .back-to-top {
     position: fixed;
     display: none;
-    right: 45px;
-    bottom: 5px;
+    right: 30px;
+    bottom: 110px;
     z-index: 99;
     border-radius: 4px;
     /* height: 35px;
