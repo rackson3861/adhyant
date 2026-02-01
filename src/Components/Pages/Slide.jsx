@@ -1,20 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import "../../assets/css/Slide.css";
 import { Link } from "react-router-dom";
-import RegistrationModal from "./RegistrationModal";
 
 export default function Slide() {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-
-  const handleAdmissionClick = (e) => {
-    e.preventDefault();
-    setIsModalOpen(true);
-  };
-
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-  };
-
   useEffect(() => {
     if (typeof window === "undefined") return;
     const el = document.getElementById("carouselExampleControlsNoTouching");
@@ -44,48 +32,13 @@ export default function Slide() {
         className="carousel slide"
         data-bs-touch="false"
         data-bs-ride="carousel"
-        data-bs-interval="15000"
+        data-bs-interval="20000"
         data-bs-pause="false"
       >
         <div className="carousel-inner">
           <div className="carousel-item active">
             <div className="owl-carousel-item position-relative">
-              <img src="/img/imagescrollerfinal.svg" alt="" />
-              <div
-                className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center"
-              >
-                <div className="container">
-                  <div className="row justify-content-start">
-                    <div className="col-sm-10 col-lg-8 slide-text-up">
-                    <h6 className="text-white text-uppercase mb-2 animated slideInDown">
-                    Coaching with Purpose & Precision — Now in Bhiwadi
-                    </h6>
-                    <h1 className="display-4 text-white animated slideInDown">
-                    Mentored By <span className="text-warning fw-bold">IITians,</span>
-
-                    <br/>
-                    Destined for <span className="text-warning fw-bold">Excellence</span>
-                    </h1>
-                    <p className="fs-5 text-white mb-4 pb-2">
-                      IIT - JEE <span className="text-warning fw-bold">|</span> Medical <span className="text-warning fw-bold">|</span> Foundation <span className="text-warning fw-bold">|</span> Career Counselling
-                    </p>
-
-                    <button
-                        onClick={handleAdmissionClick}
-                        className="btn btn-yellow rounded-pill py-md-3 px-md-4 fw-bold animated slideInRight"
-                      >
-                        ADMISSIONS OPEN 2026 | LIMITED SEATS
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="carousel-item">
-            <div className="owl-carousel-item position-relative">
-              <img className="img-fluid" src="/img/imagescrollerfinal.svg" alt="" />
+              <img src="/img/imagescroller12.svg" alt="" />
               <div
                 className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center"
               >
@@ -101,129 +54,91 @@ export default function Slide() {
                     <br/>
                     Destined for <span className="text-warning fw-bold">Excellence</span>
                     </h1>
-                    <p className="fs-5 text-white mb-4 pb-2">
+                    <p className="fs-5 text-white mb-3">
                       IIT - JEE <span className="text-warning fw-bold">|</span> Medical <span className="text-warning fw-bold">|</span> Foundation <span className="text-warning fw-bold">|</span> Career Counselling
-
                     </p>
-                    <ul className="list-unstyled text-white fs-5 mb-0">
-                        <li className="mb-1">📘 <span className="text-warning fw-bold">10+ Years</span> of Teaching Excellence</li>
-                        <li className="mb-1">🏆 <span className="text-warning fw-bold">State Toppers</span> - JEE & NEET</li>
-                        <li className="mb-1">🎯 <span className="text-warning fw-bold">500+ Selections</span> – IIT • NEET • Top Govt Colleges</li>
-                        <li className="mb-1">🌍 <span className="text-warning fw-bold">National Olympiad</span> Selections</li>
-                      </ul>
+                      <div className="hero-cta-group">
+                        <div className="d-flex flex-wrap align-items-center gap-2 mb-4 text-white">
+                          <span className="label-dashed">ADMISSION OPEN 2026</span>
+                          <span className="label-dashed">LIMITED SEATS</span>
+                        </div>
+                        <Link
+                          to="/courses"
+                          className="btn btn-yellow rounded-pill py-md-3 px-md-4 fw-bold animated slideInRight"
+                        >
+                          Join Now<i className="fa fa-arrow-right ms-3"></i>
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+
+
+          <div className="carousel-item">
+            <div className="owl-carousel-item position-relative">
+              <img className="img-fluid" src="/img/imagescroller12.svg" alt="" />
+              <div
+                className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center"
+              >
+                <div className="container">
+                  <div className="row justify-content-start">
+                    <div className="col-sm-10 col-lg-8 slide-text-up">
+                    <h6 className="text-white text-uppercase mb-2 animated slideInDown">
+                      Coaching with Purpose & Precision — Now in Bhiwadi
+                    </h6>
+
+
+                    <h1 className="display-4 text-white animated slideInDown">
+                      <span className="hero-kpi">10+ </span>
+                      <span className="hero-kpi-sub text-warning"> Years</span>
+                      <span className="hero-kpi-sub">of Teaching Excellence</span>
                       <br/>
+                      <span className="hero-kpi">500+</span>
+                      <span className="hero-kpi-sub text-warning"> Selections</span>
+                      <span className="hero-kpi-sub">  - IIT, AIIMS, Top Govt Colleges</span>
+                    </h1>
+                    <p className="fs-5 text-white mb-4 pb-2">
+                      IIT - JEE <span className="text-warning fw-bold">|</span> Medical <span className="text-warning fw-bold">|</span> Foundation <span className="text-warning fw-bold">|</span> Career Counselling
+                    </p>
 
-                      <button
-                        onClick={handleAdmissionClick}
-                        className="btn btn-yellow rounded-pill py-md-3 px-md-4 fw-bold animated slideInRight"
-                      >
-                        ADMISSIONS OPEN 2026 | LIMITED SEATS
-                      </button>
+                    <div className="hero-cta-group">
+                        <div className="d-flex flex-wrap align-items-center gap-2 mb-4 text-white">
+                          <span className="label-dashed">ADMISSION OPEN 2026</span>
+                          <span className="label-dashed">LIMITED SEATS</span>
+                        </div>
+                        <Link
+                          to="/courses"
+                          className="btn btn-yellow rounded-pill py-md-3 px-md-4 fw-bold animated slideInRight"
+                        >
+                          Join Now<i className="fa fa-arrow-right ms-3"></i>
+                        </Link>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
+
           <div className="carousel-item">
             <div className="owl-carousel-item position-relative">
-              <img className="img-fluid" src="/img/students.png" alt="" />
+              <img className="img-fluid" src="/img/IITians.svg" alt="" />
               <div
                 className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center"
               >
-                <div className="container">
-                  <div className="row justify-content-start">
-                    <div className="col-sm-10 col-lg-8 slide-text-up">
-                    <h6 className="text-white text-uppercase mb-2 animated slideInDown">
-                      Coaching with Purpose & Precision — Now in Bhiwadi
-                    </h6>
-                    <h1 className="display-4 text-white animated slideInDown">
-                    Mentored By <span className="text-warning fw-bold">IITians,</span>
-
-                    <br/>
-                    Destined for <span className="text-warning fw-bold">Excellence</span>
-                    </h1>
-                    <p className="fs-5 text-white mb-4 pb-2">
-                      IIT - JEE <span className="text-warning fw-bold">|</span> Medical <span className="text-warning fw-bold">|</span> Foundation <span className="text-warning fw-bold">|</span> Career Counselling
-                    </p>
-
-                      <Link
-                        to="/courses"
-                        className="btn btn-yellow rounded-pill py-md-3 px-md-4 animated slideInRight"
-                      >
-                        ADMISSIONS OPEN 2026 | LIMITED SEATS
-                      </Link>
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
           <div className="carousel-item">
             <div className="owl-carousel-item position-relative">
-              <img className="img-fluid" src="/img/imageslide1.svg" alt="" />
+              <img className="img-fluid" src="/img/NEET.svg" alt="" />
               <div
                 className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center"
               >
-                <div className="container">
-                  <div className="row justify-content-start">
-                    <div className="col-sm-10 col-lg-8 slide-text-up">
-                    <h6 className="text-white text-uppercase mb-2 animated slideInDown">
-                      Coaching with Purpose & Precision — Now in Bhiwadi
-                    </h6>
-                    <h1 className="display-4 text-white animated slideInDown">
-                    Mentored By <span className="text-warning fw-bold">IITians,</span>
-
-                    <br/>
-                    Destined for <span className="text-warning fw-bold">Excellence</span>
-                    </h1>
-                    <p className="fs-5 text-white mb-4 pb-2">
-                      IIT - JEE <span className="text-warning fw-bold">|</span> Medical <span className="text-warning fw-bold">|</span> Foundation <span className="text-warning fw-bold">|</span> Career Counselling
-                    </p>
-
-                      <Link
-                        to="/courses"
-                        className="btn btn-yellow rounded-pill py-md-3 px-md-4 animated slideInRight"
-                      >
-                        ADMISSIONS OPEN 2026 | LIMITED SEATS
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="carousel-item">
-            <div className="owl-carousel-item position-relative">
-              <img className="img-fluid" src="/img/imageslide1.svg" alt="" />
-              <div
-                className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center"
-              >
-                <div className="container">
-                  <div className="row justify-content-start">
-                    <div className="col-sm-10 col-lg-8 slide-text-up">
-                    <h6 className="text-white text-uppercase mb-2 animated slideInDown">
-                      Coaching with Purpose & Precision — Now in Bhiwadi
-                    </h6>
-                    <h1 className="display-4 text-white animated slideInDown">
-                    Mentored By <span className="text-warning fw-bold">IITians,</span>
-
-                    <br/>
-                    Destined for <span className="text-warning fw-bold">Excellence</span>
-                    </h1>
-                    <p className="fs-5 text-white mb-4 pb-2">
-                      IIT - JEE <span className="text-warning fw-bold">|</span> Medical <span className="text-warning fw-bold">|</span> Foundation <span className="text-warning fw-bold">|</span> Career Counselling
-                    </p>
-
-                      <Link
-                        to="/courses"
-                        className="btn btn-yellow rounded-pill py-md-3 px-md-4 animated slideInRight"
-                      >
-                        ADMISSIONS OPEN 2026 | LIMITED SEATS
-                      </Link>
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
@@ -254,8 +169,6 @@ export default function Slide() {
           <span className="visually-hidden">Next</span>
         </button>
       </div>
-      
-      <RegistrationModal isOpen={isModalOpen} onClose={handleCloseModal} />
     </>
   );
 }
