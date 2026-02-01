@@ -56,17 +56,17 @@
 /* Close Button */
 .modal-close {
   position: absolute;
-  top: 20px;
-  right: 20px;
+  top: 15px;
+  right: 15px;
   background: rgba(255, 255, 255, 0.1);
   border: 2px solid rgba(255, 255, 255, 0.2);
   border-radius: 50%;
-  font-size: 20px;
+  font-size: 18px;
   color: rgba(255, 255, 255, 0.8);
   cursor: pointer;
-  z-index: 10;
-  width: 40px;
-  height: 40px;
+  z-index: 100;
+  width: 38px;
+  height: 38px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -87,7 +87,7 @@
   background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.2) 100%);
   border-bottom: 2px solid rgba(59, 130, 246, 0.3);
   color: white;
-  padding: 50px 30px 30px;
+  padding: 50px 55px 30px 30px;
   text-align: center;
   position: relative;
   overflow: hidden;

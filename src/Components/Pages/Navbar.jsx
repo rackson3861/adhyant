@@ -74,6 +74,13 @@ export default function Navbar() {
             >
               Contact
             </NavLink>
+            <a
+              onClick={handleJoinNowClick}
+              className="nav-item nav-link d-lg-none"
+              style={{ cursor: "pointer", fontWeight: "700", color: "var(--primary)" }}
+            >
+              Join Now <i className="fa fa-arrow-right ms-2"></i>
+            </a>
           </div>
 
           {isLoading && <Spinner />}
