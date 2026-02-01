@@ -9,7 +9,7 @@ export default function Footer() {
       >
         <div className="container py-5">
           <div className="row g-5">
-          <div className="col-lg-3 col-md-6">
+          <div className="col-lg-4 col-md-6">
               <h4 className="text-white mb-3">About Us</h4>
               <p>
               Adhyant is a coaching institute helping students excel in <b>IIT-JEE, NEET, and foundational learning</b>.
@@ -37,7 +37,7 @@ export default function Footer() {
                 </button>
               </div> */}
             </div>
-            <div className="col-lg-3 col-md-6">
+            <div className="col-lg-4 col-md-6">
               <h4 className="text-white mb-3">Quick Link</h4>
               <a className="btn btn-link" href>
                 About Us
@@ -55,7 +55,7 @@ export default function Footer() {
                 FAQs &amp; Help
               </a>
             </div>
-            <div className="col-lg-3 col-md-6">
+            <div className="col-lg-4 col-md-6">
               <h4 className="text-white mb-3">Contact</h4>
               <p className="mb-2">
                 <i className="fa fa-map-marker-alt me-3" />
@@ -109,54 +109,6 @@ export default function Footer() {
 
               </div>
             </div>
-            <div className="col-lg-3 col-md-6">
-              <h4 className="text-white mb-3">Gallery</h4>
-              <div className="row g-2 pt-2">
-                <div className="col-4">
-                  <img
-                    className="img-fluid bg-light p-1"
-                    src="/img/course-1.jpg"
-                    alt=""
-                  />
-                </div>
-                <div className="col-4">
-                  <img
-                    className="img-fluid bg-light p-1"
-                    src="/img/course-2.jpg"
-                    alt=""
-                  />
-                </div>
-                <div className="col-4">
-                  <img
-                    className="img-fluid bg-light p-1"
-                    src="/img/course-3.jpg"
-                    alt=""
-                  />
-                </div>
-                <div className="col-4">
-                  <img
-                    className="img-fluid bg-light p-1"
-                    src="/img/course-2.jpg"
-                    alt=""
-                  />
-                </div>
-                <div className="col-4">
-                  <img
-                    className="img-fluid bg-light p-1"
-                    src="/img/course-3.jpg"
-                    alt=""
-                  />
-                </div>
-                <div className="col-4">
-                  <img
-                    className="img-fluid bg-light p-1"
-                    src="/img/course-1.jpg"
-                    alt=""
-                  />
-                </div>
-              </div>
-            </div>
-
           </div>
         </div>
         <div className="container">

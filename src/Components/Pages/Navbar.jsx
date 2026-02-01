@@ -60,38 +60,13 @@ export default function Navbar() {
             >
               Courses
             </NavLink>
-            <div className="nav-item dropdown">
-              <NavLink
-                to="/pages"
-                className="nav-link dropdown-toggle"
-                data-bs-toggle="dropdown"
-              >
-                Pages
-              </NavLink>
-              <div className="dropdown-menu fade-down m-0">
-                <NavLink
-                  to="/team"
-                  className="dropdown-item"
-                  activeClassName="active"
-                >
-                  Our Team
-                </NavLink>
-                <NavLink
-                  to="/testimonial"
-                  className="dropdown-item"
-                  activeClassName="active"
-                >
-                  Testimonial
-                </NavLink>
-                <NavLink
-                  to="/feedback"
-                  className="dropdown-item"
-                  activeClassName="active"
-                >
-                  Feedback
-                </NavLink>
-              </div>
-            </div>
+            <NavLink
+              to="/team"
+              className="nav-item nav-link"
+              activeClassName="active"
+            >
+              Our Team
+            </NavLink>
             <NavLink
               to="/contact"
               className="nav-item nav-link"

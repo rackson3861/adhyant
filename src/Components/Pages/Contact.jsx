@@ -1,35 +1,9 @@
-import React from "react";
-import HCaptcha from "@hcaptcha/react-hcaptcha";
+import React, { useState } from "react";
+import RegistrationModal from "./RegistrationModal";
+import "../../assets/css/Slide.css";
 
 export default function Contact() {
-  const [result, setResult] = React.useState("");
-
-  const onHCaptchaChange = (token) => {
-    setValue("h-captcha-response", token);
-  };
-
-  const onSubmit = async (event) => {
-    event.preventDefault();
-    setResult("Sending....");
-    const formData = new FormData(event.target);
-
-    formData.append("access_key", "b9fd69e0-c307-4f57-b90f-9c4106746fcb");
-
-    const response = await fetch("https://api.web3forms.com/submit", {
-      method: "POST",
-      body: formData,
-    });
-
-    const data = await response.json();
-
-    if (data.success) {
-      setResult("Form Submitted Successfully");
-      event.target.reset();
-    } else {
-      console.log("Error", data);
-      setResult(data.message);
-    }
-  };
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   return (
     <>
@@ -48,7 +22,7 @@ export default function Contact() {
             >
               <h5>Get In Touch</h5>
               <p className="mb-4">
-              Have a question or need more information? Call us or fill out the form below, and our team will get back to you soon.
+              Have a question or need more information? Call us or click the Contact Us button, and our team will get back to you soon.
               </p>
               <div className="d-flex align-items-center mb-3">
                 <div
@@ -102,92 +76,30 @@ export default function Contact() {
               />
             </div>
             <div
-              className="col-lg-4 col-md-12 wow fadeInUp"
+              className="col-lg-4 col-md-12 wow fadeInUp d-flex align-items-center justify-content-center"
               data-wow-delay="0.5s"
+              style={{ minHeight: "300px" }}
             >
-              <form onSubmit={onSubmit}>
-                <input type="hidden" name="from_name" value="eLearning" />
-
-                <div className="row g-3">
-                  <div className="col-md-6">
-                    <div className="form-floating">
-                      <input
-                        type="text"
-                        className="form-control"
-                        name="name"
-                        id="name"
-                        placeholder="Your Name"
-                        required
-                      />
-                      <label htmlFor="name">Your Name</label>
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="form-floating">
-                      <input
-                        type="email"
-                        className="form-control"
-                        id="email"
-                        name="email"
-                        placeholder="Your Email"
-                        required
-                      />
-                      <label htmlFor="email">Your Email</label>
-                    </div>
-                  </div>
-                  <div className="col-12">
-                    <div className="form-floating">
-                      <input
-                        type="number"
-                        className="form-control"
-                        id="phone"
-                        name="phone"
-                        placeholder="Mobile No"
-                        required
-                      />
-                      <label htmlFor="subject">Mobile No</label>
-                    </div>
-                  </div>
-                  <div className="col-12">
-                    <div className="form-floating">
-                      <textarea
-                        className="form-control"
-                        placeholder="Leave a message here"
-                        id="message"
-                        name="message"
-                        style={{ height: "150px" }}
-                        defaultValue={""}
-                      />
-                      <label htmlFor="message">Message</label>
-                    </div>
-                  </div>
-                  <input
-                    type="hidden"
-                    name="subject"
-                    value="New Submission from contact page"
-                  ></input>
-                  <div className="col-8">
-                    <HCaptcha
-                      sitekey="50b2fe65-b00b-4b9e-ad62-3ba471098be2"
-                      reCaptchaCompat={false}
-                      onVerify={onHCaptchaChange}
-                    />
-                  </div>
-                  <div className="col-12">
-                    <button
-                      className="btn btn-primary w-100 py-3"
-                      type="submit"
-                    >
-                      Send Message
-                    </button>
-                  </div>
-                </div>
-              </form>
-              <span>{result}</span>
+              <div className="text-center">
+                <h5 className="mb-4">Ready to Start Your Journey?</h5>
+                <p className="mb-4">Click below to get in touch with us and take the first step towards excellence!</p>
+                <button
+                  onClick={() => setIsModalOpen(true)}
+                  className="btn btn-primary rounded-pill py-3 px-5 fw-bold flashing-button-blue"
+                  style={{ fontSize: "1.2rem" }}
+                >
+                  Contact Us<i className="fa fa-arrow-right ms-3"></i>
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </div>
+      
+      <RegistrationModal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+      />
     </>
   );
 }

@@ -5,7 +5,6 @@ import Service from './Service'
 import About from './About'
 import Courses from './Courses'
 import Team from './Team'
-import Testimonial from './Testimonial'
 import Footer from './Footer'
 import Spinner from './Spinner'
 import Contact from './Contact'
@@ -21,7 +20,6 @@ export default function Home() {
             <About/>
             {/* <Courses/> */}
             <Team/>
-            <Testimonial/>
             <Footer/>
             <a href="#" className="btn btn-primary back-to-top"><i className="bi bi-arrow-up"></i></a>
         </>

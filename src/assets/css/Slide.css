@@ -9,3 +9,53 @@
 .carousel-control-prev{
     left: -4%;
 }
+
+/* Flashing animation for Join Now button */
+@keyframes flashButton {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 0 20px rgba(255, 193, 7, 0.6);
+    }
+    50% {
+        transform: scale(1.05);
+        box-shadow: 0 0 30px rgba(255, 193, 7, 0.9), 0 0 40px rgba(255, 193, 7, 0.6);
+    }
+}
+
+.flashing-button {
+    animation: flashButton 2s ease-in-out infinite;
+}
+
+/* Flashing animation for text */
+@keyframes flashText {
+    0%, 100% {
+        opacity: 1;
+        text-shadow: 0 0 10px rgba(255, 193, 7, 0.8);
+    }
+    50% {
+        opacity: 0.7;
+        text-shadow: 0 0 20px rgba(255, 193, 7, 1), 0 0 30px rgba(255, 193, 7, 0.8);
+    }
+}
+
+.flashing-text {
+    animation: flashText 1.5s ease-in-out infinite;
+}
+
+/* Flashing animation for blue button (Contact Us) */
+@keyframes flashButtonBlue {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 0 20px rgba(2, 57, 151, 0.6);
+        background-color: #023997;
+    }
+    50% {
+        transform: scale(1.05);
+        box-shadow: 0 0 30px rgba(6, 187, 204, 0.9), 0 0 40px rgba(2, 57, 151, 0.6);
+        background-color: #0558d4;
+    }
+}
+
+.flashing-button-blue {
+    animation: flashButtonBlue 2s ease-in-out infinite;
+}
