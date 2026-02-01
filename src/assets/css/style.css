@@ -253,24 +253,7 @@
 }
 
 .adhyant-navbar .navbar-toggler {
-    border-color: white !important;
-    border-width: 2px !important;
-    border-radius: 8px !important;
-    background-color: rgba(255, 255, 255, 0.1) !important;
-    backdrop-filter: blur(10px);
-    box-shadow: 0 4px 15px rgba(255, 255, 255, 0.2) !important;
-    transition: all 0.3s ease !important;
-}
-
-.adhyant-navbar .navbar-toggler:hover {
-    background-color: rgba(255, 255, 255, 0.2) !important;
-    box-shadow: 0 6px 20px rgba(255, 255, 255, 0.3) !important;
-    transform: scale(1.05);
-}
-
-.adhyant-navbar .navbar-toggler:focus {
-    box-shadow: 0 0 0 0.2rem rgba(255, 255, 255, 0.5) !important;
-    outline: none;
+    border: none !important;
 }
 
 .adhyant-navbar .navbar-toggler-icon {
