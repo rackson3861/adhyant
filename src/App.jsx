@@ -16,7 +16,7 @@ import Mern from "./Components/Course/Mern";
 import Fullstack from "./Components/Course/Fullstack";
 import Programming from "./Components/Course/Programming";
 import ShowBook from "./Components/Ebook/ShowBook";
-import BotpressChatbot from "./Components/Ebook/BotpressChatbot";
+import WhatsAppButton from "./Components/Pages/WhatsAppButton";
 import Reactjs from "./Components/Course/Reactjs";
 import Express from "./Components/Course/Express";
 import Nodejs from "./Components/Course/Nodejs";
@@ -101,7 +101,7 @@ function App() {
           <Route path="*" element={<ErrorPage />} />
         </Routes>
       </BrowserRouter>
-      <BotpressChatbot />
+      <WhatsAppButton />
     </>
   );
 }
