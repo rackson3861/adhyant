@@ -18,6 +18,53 @@
     color: black;
 }
 
+/* Info Floating Button */
+.info-float {
+    position: fixed;
+    bottom: 190px;
+    right: 30px;
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, #023997 0%, #0558d4 100%);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    text-align: center;
+    font-size: 30px;
+    box-shadow: 0 4px 20px rgba(2, 57, 151, 0.5);
+    z-index: 1000;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    animation: pulseInfo 2s infinite;
+}
+
+.info-float:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 30px rgba(2, 57, 151, 0.7);
+    background: linear-gradient(135deg, #0558d4 0%, #023997 100%);
+}
+
+.info-icon {
+    width: 34px;
+    height: 34px;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+@keyframes pulseInfo {
+    0% {
+        box-shadow: 0 4px 20px rgba(2, 57, 151, 0.5);
+    }
+    50% {
+        box-shadow: 0 4px 20px rgba(2, 57, 151, 0.8), 0 0 0 10px rgba(2, 57, 151, 0);
+    }
+    100% {
+        box-shadow: 0 4px 20px rgba(2, 57, 151, 0.5);
+    }
+}
+
 /* Instagram Floating Button */
 .instagram-float {
     position: fixed;
@@ -111,6 +158,18 @@
 
 /* Mobile responsive */
 @media screen and (max-width: 768px) {
+    .info-float {
+        bottom: 160px;
+        right: 20px;
+        width: 50px;
+        height: 50px;
+    }
+    
+    .info-icon {
+        width: 28px;
+        height: 28px;
+    }
+    
     .instagram-float {
         bottom: 90px;
         right: 20px;
@@ -137,12 +196,24 @@
     
     /* Back to top button positioning on mobile */
     .back-to-top {
-        bottom: 160px !important;
+        bottom: 230px !important;
         right: 20px !important;
     }
 }
 
 @media screen and (max-width: 576px) {
+    .info-float {
+        bottom: 135px;
+        right: 15px;
+        width: 45px;
+        height: 45px;
+    }
+    
+    .info-icon {
+        width: 25px;
+        height: 25px;
+    }
+    
     .instagram-float {
         bottom: 75px;
         right: 15px;
@@ -169,7 +240,7 @@
     
     /* Back to top button positioning on small mobile */
     .back-to-top {
-        bottom: 135px !important;
+        bottom: 195px !important;
         right: 15px !important;
     }
 }
