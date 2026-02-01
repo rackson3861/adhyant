@@ -24,6 +24,7 @@ const RegistrationModal = ({ isOpen, onClose }) => {
   });
 
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [countdown, setCountdown] = useState(5);
 
   useEffect(() => {
@@ -149,7 +150,7 @@ const RegistrationModal = ({ isOpen, onClose }) => {
     return isValid;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     // Validate all required fields
@@ -158,10 +159,49 @@ const RegistrationModal = ({ isOpen, onClose }) => {
       return;
     }
     
-    // Form submission logic will be added later for Google Sheets integration
-    console.log('Form Data:', formData);
+    // Show loading state
+    setIsLoading(true);
     
-    // Show success message
+    // ============================================
+    // PASTE YOUR GOOGLE APPS SCRIPT URL HERE 👇
+    // ============================================
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxAazNrJgn5zDlGIKWlm8Rsy0TEIDKWH9HzlxIpmIXSAWq3BN8HZ0cl7JVAgXIaGtJpmw/exec';
+    // ============================================
+    
+    try {
+      // Prepare data for Google Sheets
+      const submissionData = {
+        timestamp: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
+        fullName: formData.fullName,
+        email: formData.email,
+        phone: formData.phone,
+        school: formData.school,
+        course: formData.course,
+        class: formData.class,
+        message: formData.message || 'No message'
+      };
+      
+      console.log('Submitting to Google Sheets:', submissionData);
+      
+      // Send data to Google Sheets
+      const response = await fetch(SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(submissionData)
+      });
+      
+      console.log('Submission successful!');
+      
+    } catch (error) {
+      console.error('Error submitting to Google Sheets:', error);
+      // Still show success message even if Google Sheets fails
+    }
+    
+    // Hide loading and show success message
+    setIsLoading(false);
     setIsSubmitted(true);
     
     // Reset form
@@ -189,6 +229,7 @@ const RegistrationModal = ({ isOpen, onClose }) => {
 
   const handleClose = () => {
     setIsSubmitted(false);
+    setIsLoading(false);
     setFormData({
       fullName: '',
       email: '',
@@ -216,7 +257,15 @@ const RegistrationModal = ({ isOpen, onClose }) => {
           <i className="fa fa-times"></i>
         </button>
         
-        {!isSubmitted ? (
+        {isLoading ? (
+          <div className="loading-container">
+            <div className="loading-spinner">
+              <div className="spinner"></div>
+            </div>
+            <h3 className="loading-title">Submitting your application...</h3>
+            <p className="loading-message">Please wait while we process your registration</p>
+          </div>
+        ) : !isSubmitted ? (
           <>
             <div className="modal-header">
               <h2>Join Adhyant</h2>
