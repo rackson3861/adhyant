@@ -731,6 +731,11 @@ body {
 
 
 /*** Categories & Courses ***/
+/* 40px gap between slides and courses */
+.container-xxl.category {
+    margin-top: 40px !important;
+}
+
 .category img,
 .course-item img {
     transition: .5s;
