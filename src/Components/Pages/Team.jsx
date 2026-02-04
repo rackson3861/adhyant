@@ -169,7 +169,7 @@ export default function Team() {
                   </div>
                 </div>
                 <div className="text-center p-4">
-                  <h5 className="mb-0">Deepak Kumari</h5>
+                  <h5 className="mb-0">Deepak Gupta</h5>
                   <small><b>NIT Allahabad</b></small>
                   <br/>
                   <small>Chief Advisor</small>

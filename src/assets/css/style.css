@@ -1,4 +1,18 @@
 /********** Template CSS **********/
+
+/* ===========================================
+   RESET FOR ZERO GAP LAYOUT
+   =========================================== */
+html {
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
 :root {
     /* --primary: #06BBCC; */
     --primary: #023997;
@@ -927,4 +941,11 @@
     margin-right: 0;
     padding-right: 0;
     border-right: none;
+}
+
+/* Mobile spacing for courses section */
+@media (max-width: 767px) {
+    .mobile-spacing {
+        padding-top: 100px !important;
+    }
 }

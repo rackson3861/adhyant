@@ -1,0 +1,39 @@
+/* Course section mobile spacing - CSS BACKUP */
+@media (max-width: 767px) {
+    .courses-section {
+        margin-top: 200px !important;
+    }
+    
+    /* Ensure course labels are centered on mobile */
+    .course-label {
+        position: absolute !important;
+        top: 50% !important;
+        left: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        text-align: center !important;
+        background-color: rgba(255, 255, 255, 0.95) !important;
+        padding: 1rem 1.5rem !important;
+        border-radius: 0.5rem !important;
+        min-width: 200px !important;
+        z-index: 10 !important;
+    }
+}
+
+/* Desktop - keep labels centered */
+@media (min-width: 768px) {
+    .courses-section {
+        margin-top: 0 !important;
+    }
+    
+    .course-label {
+        position: absolute !important;
+        top: 50% !important;
+        left: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        text-align: center !important;
+        background-color: rgba(255, 255, 255, 0.95) !important;
+        padding: 1rem 1.5rem !important;
+        border-radius: 0.5rem !important;
+        z-index: 10 !important;
+    }
+}
