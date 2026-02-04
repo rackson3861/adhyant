@@ -88,6 +88,9 @@ export default function Slide() {
                         <p className="flashing-text text-warning fw-bold mt-3 mb-0">
                           Batch Starting in April 2026
                         </p>
+                        <p className="location-text text-warning fw-bold mt-2 mb-0">
+                          Now in Bhiwadi
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -141,6 +144,9 @@ export default function Slide() {
                         </button>
                         <p className="flashing-text text-warning fw-bold mt-2 mb-0">
                           Batch Starting in April 2026
+                        </p>
+                        <p className="location-text text-warning fw-bold mt-2 mb-0">
+                          Now in Bhiwadi
                         </p>
                       </div>
                     </div>

@@ -160,66 +160,74 @@
   .carousel.slide .slide-text-up,
   .slide-text-up {
     text-align: left !important;
-    padding-left: 80px !important;
-    padding-right: 50px !important;
-    max-width: 85% !important;
+    padding-left: 135px !important;
+    padding-right: 55px !important;
+    max-width: 82% !important;
   }
   
   .slide-text-up h6 {
-    font-size: 1.4rem !important;
+    font-size: 1.65rem !important;
     font-weight: 600 !important;
     letter-spacing: 0.05em !important;
-    margin-bottom: 0.85rem !important;
+    margin-bottom: 0.95rem !important;
   }
 
   .slide-text-up h1 {
-    font-size: 2.8rem !important;
+    font-size: 3.2rem !important;
     line-height: 1.25 !important;
     font-weight: 700 !important;
     text-shadow: 2px 2px 8px rgba(0,0,0,0.5) !important;
-    margin-bottom: 1.15rem !important;
+    margin-bottom: 1.3rem !important;
   }
 
   .slide-text-up .hero-kpi {
-    font-size: 2.8rem !important;
+    font-size: 3.2rem !important;
     font-weight: 700 !important;
     text-shadow: 2px 2px 8px rgba(0,0,0,0.5) !important;
   }
 
   .slide-text-up .hero-kpi-sub {
-    font-size: 1.65rem !important;
+    font-size: 1.85rem !important;
     font-weight: 500 !important;
   }
 
   .slide-text-up p {
-    font-size: 1.4rem !important;
+    font-size: 1.65rem !important;
     font-weight: 400 !important;
-    margin-bottom: 1.4rem !important;
+    margin-bottom: 1.5rem !important;
   }
 
   .slide-text-up .btn {
-    font-size: 1.25rem !important;
-    padding: 0.85rem 2rem !important;
+    font-size: 1.4rem !important;
+    padding: 0.95rem 2.2rem !important;
     font-weight: 600 !important;
     border-radius: 50px !important;
   }
 
   .slide-text-up .btn i {
-    font-size: 1.15rem !important;
-    margin-left: 0.5rem !important;
+    font-size: 1.3rem !important;
+    margin-left: 0.55rem !important;
   }
 
   .slide-text-up .flashing-text {
-    font-size: 1.25rem !important;
+    font-size: 1.4rem !important;
     font-weight: 600 !important;
-    margin-top: calc(0.85rem + 10px) !important;
+    margin-top: calc(0.95rem + 11px) !important;
+    text-align: center !important;
+    display: block !important;
+  }
+
+  .slide-text-up .location-text {
+    font-size: 1.3rem !important;
+    font-weight: 600 !important;
+    margin-top: 0.6rem !important;
     text-align: center !important;
     display: block !important;
   }
 
   .label-dashed {
-    font-size: 0.95rem !important;
-    padding: 0.45rem 0.85rem !important;
+    font-size: 1.05rem !important;
+    padding: 0.5rem 0.95rem !important;
     font-weight: 600 !important;
     border: 2px solid currentColor !important;
     border-radius: 5px !important;
@@ -249,66 +257,74 @@
   .carousel.slide .slide-text-up,
   .slide-text-up {
     text-align: left !important;
-    padding-left: 70px !important;
-    padding-right: 45px !important;
-    max-width: 83% !important;
+    padding-left: 125px !important;
+    padding-right: 50px !important;
+    max-width: 80% !important;
   }
   
   .slide-text-up h6 {
-    font-size: 1.2rem !important;
+    font-size: 1.5rem !important;
     font-weight: 600 !important;
     letter-spacing: 0.05em !important;
-    margin-bottom: 0.75rem !important;
+    margin-bottom: 0.85rem !important;
   }
 
   .slide-text-up h1 {
-    font-size: 2.3rem !important;
+    font-size: 2.7rem !important;
     line-height: 1.25 !important;
     font-weight: 700 !important;
     text-shadow: 2px 2px 8px rgba(0,0,0,0.5) !important;
-    margin-bottom: 1rem !important;
+    margin-bottom: 1.15rem !important;
   }
 
   .slide-text-up .hero-kpi {
-    font-size: 2.3rem !important;
+    font-size: 2.7rem !important;
     font-weight: 700 !important;
     text-shadow: 2px 2px 8px rgba(0,0,0,0.5) !important;
   }
 
   .slide-text-up .hero-kpi-sub {
-    font-size: 1.4rem !important;
+    font-size: 1.6rem !important;
     font-weight: 500 !important;
   }
 
   .slide-text-up p {
-    font-size: 1.2rem !important;
+    font-size: 1.45rem !important;
     font-weight: 400 !important;
-    margin-bottom: 1.2rem !important;
+    margin-bottom: 1.35rem !important;
   }
 
   .slide-text-up .btn {
-    font-size: 1.1rem !important;
-    padding: 0.75rem 1.8rem !important;
+    font-size: 1.2rem !important;
+    padding: 0.8rem 1.9rem !important;
     font-weight: 600 !important;
     border-radius: 50px !important;
   }
 
   .slide-text-up .btn i {
-    font-size: 1rem !important;
-    margin-left: 0.45rem !important;
+    font-size: 1.1rem !important;
+    margin-left: 0.48rem !important;
   }
 
   .slide-text-up .flashing-text {
+    font-size: 1.2rem !important;
+    font-weight: 600 !important;
+    margin-top: calc(0.8rem + 9px) !important;
+    text-align: center !important;
+    display: block !important;
+  }
+
+  .slide-text-up .location-text {
     font-size: 1.1rem !important;
     font-weight: 600 !important;
-    margin-top: calc(0.75rem + 8px) !important;
+    margin-top: 0.55rem !important;
     text-align: center !important;
     display: block !important;
   }
 
   .label-dashed {
-    font-size: 0.85rem !important;
-    padding: 0.4rem 0.75rem !important;
+    font-size: 0.92rem !important;
+    padding: 0.42rem 0.78rem !important;
     font-weight: 600 !important;
     border: 2px solid currentColor !important;
     border-radius: 5px !important;
@@ -395,6 +411,14 @@
     display: block !important;
   }
 
+  .slide-text-up .location-text {
+    font-size: 0.95rem !important;
+    font-weight: 600 !important;
+    margin-top: 0.5rem !important;
+    text-align: center !important;
+    display: block !important;
+  }
+
   .label-dashed {
     font-size: 0.8rem !important;
     padding: 0.38rem 0.7rem !important;
@@ -473,6 +497,14 @@
     display: block !important;
   }
 
+  .slide-text-up .location-text {
+    font-size: 0.95rem !important;
+    font-weight: 600 !important;
+    margin-top: 0.5rem !important;
+    text-align: center !important;
+    display: block !important;
+  }
+
   .label-dashed {
     font-size: 0.82rem !important;
     padding: 0.35rem 0.7rem !important;
@@ -547,6 +579,14 @@
     display: block !important;
   }
 
+  .slide-text-up .location-text {
+    font-size: 1.0rem !important;
+    font-weight: 600 !important;
+    margin-top: 0.52rem !important;
+    text-align: center !important;
+    display: block !important;
+  }
+
   .label-dashed {
     font-size: 0.85rem !important;
     padding: 0.38rem 0.75rem !important;
@@ -617,6 +657,14 @@
   .slide-text-up .flashing-text {
     font-size: 0.9rem !important;
     margin-top: calc(0.6rem + 5px) !important;
+    text-align: center !important;
+    display: block !important;
+  }
+
+  .slide-text-up .location-text {
+    font-size: 0.82rem !important;
+    font-weight: 600 !important;
+    margin-top: 0.45rem !important;
     text-align: center !important;
     display: block !important;
   }
@@ -1666,6 +1714,16 @@
     margin-left: auto !important;
     margin-right: auto !important;
   }
+
+  .slide-text-up .location-text {
+    font-size: 0.63rem !important;
+    font-weight: 600 !important;
+    margin-top: 0.3rem !important;
+    text-align: center !important;
+    display: block !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
   
   .position-absolute.d-flex.align-items-center {
     padding: 10px !important;
@@ -1744,6 +1802,16 @@
     margin-left: auto !important;
     margin-right: auto !important;
   }
+
+  .slide-text-up .location-text {
+    font-size: 0.58rem !important;
+    font-weight: 600 !important;
+    margin-top: 0.25rem !important;
+    text-align: center !important;
+    display: block !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
   
   .position-absolute.d-flex.align-items-center {
     padding: 8px !important;
@@ -1812,6 +1880,16 @@
     margin-top: 0.28rem !important;
     line-height: 1.2 !important;
     text-align: center !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  .slide-text-up .location-text {
+    font-size: 0.56rem !important;
+    font-weight: 600 !important;
+    margin-top: 0.23rem !important;
+    text-align: center !important;
+    display: block !important;
     margin-left: auto !important;
     margin-right: auto !important;
   }
@@ -1886,6 +1964,16 @@
     margin-left: auto !important;
     margin-right: auto !important;
   }
+
+  .slide-text-up .location-text {
+    font-size: 0.52rem !important;
+    font-weight: 600 !important;
+    margin-top: 0.21rem !important;
+    text-align: center !important;
+    display: block !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
   
   .position-absolute.d-flex.align-items-center {
     padding: 8px !important;
@@ -1954,6 +2042,16 @@
     margin-top: 0.23rem !important;
     line-height: 1.2 !important;
     text-align: center !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  .slide-text-up .location-text {
+    font-size: 0.49rem !important;
+    font-weight: 600 !important;
+    margin-top: 0.19rem !important;
+    text-align: center !important;
+    display: block !important;
     margin-left: auto !important;
     margin-right: auto !important;
   }
@@ -2028,6 +2126,16 @@
     margin-left: auto !important;
     margin-right: auto !important;
   }
+
+  .slide-text-up .location-text {
+    font-size: 0.43rem !important;
+    font-weight: 600 !important;
+    margin-top: 0.17rem !important;
+    text-align: center !important;
+    display: block !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
   
   .label-dashed {
     font-size: 0.5rem !important;
@@ -2092,6 +2200,16 @@
     max-width: 95% !important;
     line-height: 1.15 !important;
     text-align: center !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  .slide-text-up .location-text {
+    font-size: 0.4rem !important;
+    font-weight: 600 !important;
+    margin-top: 0.15rem !important;
+    text-align: center !important;
+    display: block !important;
     margin-left: auto !important;
     margin-right: auto !important;
   }
@@ -2229,6 +2347,16 @@
     margin-left: auto !important;
     margin-right: auto !important;
   }
+
+  .slide-text-up .location-text {
+    font-size: 0.33rem !important;
+    font-weight: 600 !important;
+    margin-top: 0.13rem !important;
+    text-align: center !important;
+    display: block !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
   
   .label-dashed {
     font-size: 0.38rem !important;
@@ -2293,6 +2421,16 @@
     max-width: 96% !important;
     line-height: 1.1 !important;
     text-align: center !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  .slide-text-up .location-text {
+    font-size: 0.31rem !important;
+    font-weight: 600 !important;
+    margin-top: 0.12rem !important;
+    text-align: center !important;
+    display: block !important;
     margin-left: auto !important;
     margin-right: auto !important;
   }
@@ -2431,4 +2569,26 @@
 
 .flashing-button-blue {
   animation: flashButtonBlue 2s ease-in-out infinite;
+}
+
+/* Flashing animation for location text (orange-yellow color) */
+@keyframes flashLocation {
+  0%, 100% {
+    opacity: 1;
+    text-shadow: 0 0 10px rgba(255, 165, 0, 0.8);
+  }
+  50% {
+    opacity: 0.7;
+    text-shadow: 0 0 20px rgba(255, 165, 0, 1), 0 0 30px rgba(255, 165, 0, 0.8);
+  }
+}
+
+.location-text {
+  animation: flashLocation 1.8s ease-in-out infinite;
+  text-align: center !important;
+  display: block !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  width: fit-content !important;
+  max-width: 100% !important;
 }
