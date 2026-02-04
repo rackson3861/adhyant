@@ -1,7 +1,32 @@
+/* Reduce gap below courses section */
+.courses-section {
+    padding-bottom: 1rem !important;
+    margin-bottom: 0 !important;
+}
+
+/* Reduce gap below 530px */
+@media (max-width: 530px) {
+    .courses-section {
+        padding-bottom: 0.25rem !important;
+        margin-bottom: 0 !important;
+    }
+    
+    .courses-section .container {
+        padding-bottom: 0 !important;
+        margin-bottom: 0 !important;
+    }
+    
+    /* Reduce row gap */
+    .courses-section .row {
+        margin-bottom: 0 !important;
+    }
+}
+
 /* Course section mobile spacing - CSS BACKUP */
 @media (max-width: 767px) {
     .courses-section {
         margin-top: 200px !important;
+        padding-bottom: 0.25rem !important;
     }
     
     /* Ensure course labels are centered on mobile */
@@ -23,6 +48,7 @@
 @media (min-width: 768px) {
     .courses-section {
         margin-top: 0 !important;
+        padding-bottom: 1rem !important;
     }
     
     .course-label {

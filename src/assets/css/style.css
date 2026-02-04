@@ -943,6 +943,20 @@ body {
     border-right: none;
 }
 
+/* Mobile spacing control */
+@media (max-width: 530px) {
+    /* Reduce all py-5 padding on mobile */
+    .container-xxl.py-5 {
+        padding-top: 1.5rem !important;
+        padding-bottom: 1.5rem !important;
+    }
+    
+    .category.py-5 {
+        padding-top: 3rem !important;
+        padding-bottom: 0.5rem !important;
+    }
+}
+
 /* Mobile spacing for courses section */
 @media (max-width: 767px) {
     .mobile-spacing {
