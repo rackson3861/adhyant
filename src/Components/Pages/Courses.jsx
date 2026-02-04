@@ -1,33 +1,13 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import "../../assets/css/Courses.css";
 
 export default function Cources() {
-  const [spacing, setSpacing] = useState('0px');
-
-  useEffect(() => {
-    const updateSpacing = () => {
-      const newSpacing = window.innerWidth < 768 ? '200px' : '0px';
-      setSpacing(newSpacing);
-      console.log('Screen width:', window.innerWidth, 'Spacing:', newSpacing);
-    };
-    
-    updateSpacing();
-    window.addEventListener('resize', updateSpacing);
-    
-    return () => window.removeEventListener('resize', updateSpacing);
-  }, []);
-
   return (
     <>
       {/* *********** CATAGORY ************** */}
 
       <div 
-        className="container-xxl category courses-section"
-        style={{ 
-          marginTop: spacing,
-          paddingTop: '3rem',
-          paddingBottom: '3rem'
-        }}
+        className="container-xxl py-5 category courses-section"
       >
   <div className="container">
   <div className="text-center wow fadeInUp" data-wow-delay="0.1s">
