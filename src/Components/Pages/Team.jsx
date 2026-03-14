@@ -39,7 +39,7 @@ export default function Team() {
                 <div className="text-center p-4">
                   <h5 className="mb-0">Awanish Jha</h5>
                   <small><b>IIT Guwahati</b></small> <br/>
-                  <small>Physic Faculty</small>
+                  <small>Physics Faculty</small>
                 </div>
               </div>
             </div>
