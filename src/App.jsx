@@ -7,7 +7,6 @@ import Courses1 from "./Components/Routes/Courses1";
 import Team1 from "./Components/Routes/Team1";
 import Contact1 from "./Components/Routes/Contact1";
 import ErrorPage from "./Components/Pages/ErrorPage";
-import Sign from "./Components/Pages/Sign";
 import SignUp from "./Components/Pages/Register";
 import Javaprog from "./Components/Course/Javaprog";
 import Dsa from "./Components/Course/Dsa";
@@ -27,14 +26,18 @@ import Css from "./Components/Course/Css";
 import Advjava from "./Components/Course/Advjava";
 import JavaQuiz from "./Components/Quiz/JavaQuiz";
 import Test from "./Components/Pages/Test";
+import OnlineTest from "./Components/Pages/OnlineTest";
+import MyRecordings from "./Components/Pages/MyRecordings";
+import ErrorBoundary from "./Components/Pages/ErrorBoundary";
 import FullstackQuiz from "./Components/Quiz/FullstackQuiz";
 import JavascriptQuiz from "./Components/Quiz/JavascriptQuiz";
 import ReactQuiz from "./Components/Quiz/ReactQuiz";
 import Profile from "./Components/Pages/Profile";
-import { useAuth0 } from "@auth0/auth0-react";
+import AdminDashboard from "./Components/Pages/AdminDashboard";
+import TestCodeGate from "./Components/TestCodeGate";
+import TestSignUp from "./Components/Pages/TestSignUp";
 
 function App() {
-  const { loginWithRedirect } = useAuth0();
   return (
     <>
       <BrowserRouter>
@@ -45,20 +48,19 @@ function App() {
           <Route path="/team" element={<Team1 />} />
           <Route path="/contact" element={<Contact1 />} />
           <Route path="/error" element={<ErrorPage />} />
-          <Route
-            path="/signin"
-            render={() => {
-              loginWithRedirect();
-            }}
-          />
           <Route path="/register" element={<SignUp />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/test-signup" element={<TestSignUp />} />
+          <Route path="/test-form" element={<TestSignUp />} />
 
-          <Route path="/test" element={<Test />} />
-          <Route path="/test/java" element={<JavaQuiz />} />
-          <Route path="/test/fullstack" element={<FullstackQuiz />} />
-          <Route path="/test/javascript" element={<JavascriptQuiz />} />
-          <Route path="/test/react" element={<ReactQuiz />} />
+          <Route path="/test" element={<TestCodeGate><Test /></TestCodeGate>} />
+          <Route path="/test/online" element={<TestCodeGate><ErrorBoundary><OnlineTest /></ErrorBoundary></TestCodeGate>} />
+          <Route path="/test/recordings" element={<TestCodeGate><MyRecordings /></TestCodeGate>} />
+          <Route path="/test/java" element={<TestCodeGate><JavaQuiz /></TestCodeGate>} />
+          <Route path="/test/fullstack" element={<TestCodeGate><FullstackQuiz /></TestCodeGate>} />
+          <Route path="/test/javascript" element={<TestCodeGate><JavascriptQuiz /></TestCodeGate>} />
+          <Route path="/test/react" element={<TestCodeGate><ReactQuiz /></TestCodeGate>} />
 
           <Route path="/courses/java" element={<Javaprog />} />
           <Route path="/courses/dsa" element={<Dsa />} />

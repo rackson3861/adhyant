@@ -1,12 +1,10 @@
 import React, { useState } from "react";
 import { Link, NavLink } from "react-router-dom";
-import { useAuth0 } from "@auth0/auth0-react";
-import Spinner from "./Spinner";
 import RegistrationModal from "./RegistrationModal";
+import { useAdmin } from "../../context/AdminContext";
 
 export default function Navbar() {
-  const { user, isAuthenticated, isLoading, logout, loginWithRedirect } =
-    useAuth0();
+  const { isAdmin, logoutAdmin } = useAdmin();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handleJoinNowClick = () => {
@@ -38,42 +36,16 @@ export default function Navbar() {
         </button>
         <div className="collapse navbar-collapse" id="navbarCollapse">
           <div className="navbar-nav ms-auto p-4 p-lg-0">
-            <NavLink
-              exact
-              to="/"
-              className="nav-item nav-link"
-              activeClassName="active"
-            >
-              Home
-            </NavLink>
-            <NavLink
-              to="/about"
-              className="nav-item nav-link"
-              activeClassName="active"
-            >
-              About
-            </NavLink>
-            <NavLink
-              to="/courses"
-              className="nav-item nav-link"
-              activeClassName="active"
-            >
-              Courses
-            </NavLink>
-            <NavLink
-              to="/team"
-              className="nav-item nav-link"
-              activeClassName="active"
-            >
-              Our Team
-            </NavLink>
-            <NavLink
-              to="/contact"
-              className="nav-item nav-link"
-              activeClassName="active"
-            >
-              Contact
-            </NavLink>
+            <NavLink to="/" className="nav-item nav-link" activeClassName="active">Home</NavLink>
+            <NavLink to="/about" className="nav-item nav-link" activeClassName="active">About</NavLink>
+            <NavLink to="/courses" className="nav-item nav-link" activeClassName="active">Courses</NavLink>
+            <NavLink to="/team" className="nav-item nav-link" activeClassName="active">Our Team</NavLink>
+            <NavLink to="/contact" className="nav-item nav-link" activeClassName="active">Contact</NavLink>
+            <NavLink to="/test" className="nav-item nav-link nav-link-highlight" activeClassName="active">Take Test</NavLink>
+            <NavLink to="/test-form" className="nav-item nav-link nav-link-highlight" activeClassName="active">Upcoming Entrance Exam</NavLink>
+            {isAdmin && (
+              <NavLink to="/admin" className="nav-item nav-link" activeClassName="active">Admin</NavLink>
+            )}
             <a
               onClick={handleJoinNowClick}
               className="nav-item nav-link d-lg-none"
@@ -83,26 +55,17 @@ export default function Navbar() {
             </a>
           </div>
 
-          {isLoading && <Spinner />}
-
-          {isAuthenticated && (
-            <NavLink
-              to="/profile"
-              className="nav-item nav-link"
-              activeClassName="active"
-            >
-              {user.name}
-            </NavLink>
-          )}
-          {isAuthenticated ? (
-            <button
-              className="btn btn-primary py-4 px-lg-5 d-none d-lg-block"
-              onClick={() =>
-                logout({ logoutParams: { returnTo: window.location.origin } })
-              }
-            >
-              Log out
-            </button>
+          {isAdmin ? (
+            <>
+              <Link to="/admin" className="btn btn-outline-light py-2 px-3 me-2 d-none d-lg-inline-block">Admin</Link>
+              <button
+                type="button"
+                className="btn btn-outline-light py-2 px-3 d-none d-lg-inline-block"
+                onClick={() => { logoutAdmin(); window.location.href = "/"; }}
+              >
+                Logout
+              </button>
+            </>
           ) : (
             <button
               className="btn btn-primary py-4 px-lg-5 d-none d-lg-block"
@@ -114,7 +77,7 @@ export default function Navbar() {
           )}
         </div>
       </nav>
-      
+
       <RegistrationModal isOpen={isModalOpen} onClose={handleCloseModal} />
     </>
   );

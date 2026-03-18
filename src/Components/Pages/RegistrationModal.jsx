@@ -162,11 +162,8 @@ const RegistrationModal = ({ isOpen, onClose }) => {
     // Show loading state
     setIsLoading(true);
     
-    // ============================================
-    // PASTE YOUR GOOGLE APPS SCRIPT URL HERE 👇
-    // ============================================
-    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxAazNrJgn5zDlGIKWlm8Rsy0TEIDKWH9HzlxIpmIXSAWq3BN8HZ0cl7JVAgXIaGtJpmw/exec';
-    // ============================================
+    // Same Apps Script URL as .env VITE_RECORDING_UPLOAD_URL (registration + test submissions)
+    const SCRIPT_URL = import.meta.env.VITE_RECORDING_UPLOAD_URL || import.meta.env.VITE_TEST_SUBMISSION_URL || '';
     
     try {
       // Prepare data for Google Sheets

@@ -1,4 +1,5 @@
 import React from 'react'
+import { Link } from 'react-router-dom'
 import Navbar from './Navbar'
 import Slide from './Slide'
 import Service from './Service'
@@ -16,6 +17,25 @@ export default function Home() {
             <Spinner/>
             <Navbar/>
             <Slide/>
+            {/* Sign up for Test (Online & Offline) - shareable link for students */}
+            <div className="container py-4 test-signup-banner-wrap">
+                <div className="row justify-content-center">
+                    <div className="col-12">
+                        <div className="test-signup-banner">
+                            <div className="test-signup-banner-inner">
+                                <div className="test-signup-banner-content">
+                                    <span className="test-signup-banner-badge">Online & Offline</span>
+                                    <h5 className="test-signup-banner-title">Upcoming Entrance Exam</h5>
+                                    <p className="test-signup-banner-desc">22nd March</p>
+                                </div>
+                                <Link to="/test-form" className="test-signup-banner-btn">
+                                    Sign up for test
+                                </Link>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
             <Service/>
             <About/>
             {/* <Courses/> */}
