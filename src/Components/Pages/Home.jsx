@@ -23,11 +23,9 @@ export default function Home() {
                     <div className="col-12">
                         <div className="test-signup-banner">
                             <div className="test-signup-banner-inner">
-                                <div className="test-signup-banner-content">
-                                    <span className="test-signup-banner-badge">Online & Offline</span>
-                                    <h5 className="test-signup-banner-title">Upcoming Entrance Exam</h5>
-                                    <p className="test-signup-banner-desc">22nd March</p>
-                                </div>
+                                <span className="test-signup-banner-badge">Online & Offline</span>
+                                <h5 className="test-signup-banner-title">Upcoming Entrance Exam</h5>
+                                <p className="test-signup-banner-desc">22nd March</p>
                                 <Link to="/test-form" className="test-signup-banner-btn">
                                     Sign up for test
                                 </Link>
