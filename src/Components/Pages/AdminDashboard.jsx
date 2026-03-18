@@ -63,7 +63,7 @@ export default function AdminDashboard() {
     if (!isAdmin) return;
     const url = getListUrl();
     if (!url) {
-      setError("Set VITE_RECORDING_UPLOAD_URL (Apps Script Web App URL) to load submissions.");
+      setError("Set NEXT_PUBLIC_RECORDING_UPLOAD_URL (Apps Script Web App URL) to load submissions.");
       setLoading(false);
       return;
     }
@@ -99,7 +99,7 @@ export default function AdminDashboard() {
   const fetchTestCodes = React.useCallback(() => {
     const listUrl = getListTestCodesUrl(ADMIN_SECRET);
     if (!listUrl) {
-      setCodesError("Script URL not set. Add VITE_RECORDING_UPLOAD_URL or VITE_TEST_SUBMISSION_URL in .env");
+      setCodesError("Script URL not set. Add NEXT_PUBLIC_RECORDING_UPLOAD_URL or VITE_RECORDING_UPLOAD_URL or VITE_TEST_SUBMISSION_URL in .env");
       return;
     }
     if (!ADMIN_SECRET) {

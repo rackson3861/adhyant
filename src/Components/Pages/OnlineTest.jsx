@@ -593,7 +593,7 @@ export default function OnlineTest() {
   useEffect(() => {
     if (phase !== PHASE.RESULT || !recordedBlob || savedOnceRef.current) return;
     savedOnceRef.current = true;
-    const uploadUrl = import.meta.env.VITE_RECORDING_UPLOAD_URL || import.meta.env.VITE_TEST_SUBMISSION_URL;
+    const uploadUrl = import.meta.env.NEXT_PUBLIC_RECORDING_UPLOAD_URL || import.meta.env.VITE_RECORDING_UPLOAD_URL || import.meta.env.VITE_TEST_SUBMISSION_URL;
     const testCode = typeof sessionStorage !== "undefined" ? sessionStorage.getItem(STORAGE_KEY_TEST_CODE) : null;
     const metadata = {
       studentName: (studentName || "").trim(),

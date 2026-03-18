@@ -40,7 +40,7 @@ Recommended approach:
 3. **Option B – Upload API that proxies to storage**  
    - If your backend (e.g. Node on another host) accepts multipart uploads and then uploads to S3/R2, the frontend can POST the blob to that backend. Vercel would only serve the frontend; the upload goes to your backend.
 
-The app is prepared for an upload URL: set **`VITE_RECORDING_UPLOAD_URL`** in your Vercel project (Environment Variables). If set, the frontend will POST the recording to that URL after submit. That URL should point to your presigned endpoint or your own upload API that writes to S3/R2 (or similar).
+The app is prepared for an upload URL: set **`NEXT_PUBLIC_RECORDING_UPLOAD_URL`** (or `VITE_RECORDING_UPLOAD_URL`) in your Vercel project (Environment Variables). If set, the frontend will POST the recording to that URL after submit. That URL should point to your presigned endpoint or your own upload API that writes to S3/R2 (or similar).
 
 ## Summary
 

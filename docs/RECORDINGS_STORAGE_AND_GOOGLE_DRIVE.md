@@ -40,7 +40,7 @@ To save recordings to **Google Drive** (so you can see them in one place, share,
      - Host this upload endpoint elsewhere (e.g. Railway, Render), or
      - Use **resumable upload**: backend returns an upload URL, frontend uploads the blob in chunks (more work).
 
-2. **Frontend**: Set `VITE_RECORDING_UPLOAD_URL` to your backend’s upload URL. After submit, the app will POST the recording there; your backend then uploads it to Drive.
+2. **Frontend**: Set `NEXT_PUBLIC_RECORDING_UPLOAD_URL (or VITE_RECORDING_UPLOAD_URL)` to your backend’s upload URL. After submit, the app will POST the recording there; your backend then uploads it to Drive.
 
 3. **Minimal size**: The same small recording (low bitrate/resolution) is what the frontend sends, so Drive gets the same minimal-size file.
 
@@ -57,4 +57,4 @@ To save recordings to **Google Drive** (so you can see them in one place, share,
 | See all students’ recordings in one place | Backend that uploads to **Google Drive** (or S3/R2) and optionally stores metadata in a DB. |
 | Minimal size                 | Already applied in the app (low bitrate, 320×240); same blob can be sent to your backend for Drive. |
 
-For a ready-made backend that uploads to Drive, you’d add a serverless function or small server that uses the [Google Drive API](https://developers.google.com/drive/api/guides/about-sdk) with a service account and implements the upload endpoint that `VITE_RECORDING_UPLOAD_URL` points to.
+For a ready-made backend that uploads to Drive, you’d add a serverless function or small server that uses the [Google Drive API](https://developers.google.com/drive/api/guides/about-sdk) with a service account and implements the upload endpoint that `NEXT_PUBLIC_RECORDING_UPLOAD_URL` points to.

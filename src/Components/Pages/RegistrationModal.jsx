@@ -162,8 +162,8 @@ const RegistrationModal = ({ isOpen, onClose }) => {
     // Show loading state
     setIsLoading(true);
     
-    // Same Apps Script URL as .env VITE_RECORDING_UPLOAD_URL (registration + test submissions)
-    const SCRIPT_URL = import.meta.env.VITE_RECORDING_UPLOAD_URL || import.meta.env.VITE_TEST_SUBMISSION_URL || '';
+    // Same Apps Script URL as .env NEXT_PUBLIC_RECORDING_UPLOAD_URL (registration + test submissions)
+    const SCRIPT_URL = import.meta.env.NEXT_PUBLIC_RECORDING_UPLOAD_URL || import.meta.env.VITE_RECORDING_UPLOAD_URL || import.meta.env.VITE_TEST_SUBMISSION_URL || '';
     
     try {
       // Prepare data for Google Sheets

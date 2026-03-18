@@ -1,4 +1,4 @@
-const SCRIPT_URL = import.meta.env.VITE_RECORDING_UPLOAD_URL || import.meta.env.VITE_TEST_SUBMISSION_URL || "";
+const SCRIPT_URL = import.meta.env.NEXT_PUBLIC_RECORDING_UPLOAD_URL || import.meta.env.VITE_RECORDING_UPLOAD_URL || import.meta.env.VITE_TEST_SUBMISSION_URL || "";
 
 function getBaseAndId() {
   if (!SCRIPT_URL) return { base: "", scriptId: null };
