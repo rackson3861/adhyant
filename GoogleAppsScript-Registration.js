@@ -7,6 +7,118 @@
  * SETUP: Copy this entire file to Google Apps Script
  */
 
+/**
+ * Single spreadsheet (ID below) with one tab per storage domain.
+ * Tabs (legacy names auto-renamed on first access):
+ *   Adhyant_Storage_Registrations, Adhyant_Storage_TestSubmissions, Adhyant_Storage_TestSessions,
+ *   Adhyant_Storage_TestCodes, Adhyant_Storage_ResumeCodes, Adhyant_Storage_QuestionPapers,
+ *   Adhyant_Storage_TestFeedbackRows, Adhyant_Storage_TestSignUps
+ * Drive roots: Adhyant_Storage_OnlineTest_Uploads, Adhyant_Storage_LegacyZipSubmissions,
+ *   Adhyant_Storage_QuestionPaperImages, Adhyant_Storage_TestFeedback
+ * Student uploads use folder/file prefix Student_<Name>_Mob<phone>.
+ */
+var ADHYANT_MAIN_SPREADSHEET_ID = '1fC7EVW1Gs_y4knbuXRHO_dZ_xb6NIw37PXri-dE55Q8';
+var DRIVE_LABEL_MAX_LEN = 200;
+
+function openAdhyantSpreadsheet() {
+  return SpreadsheetApp.openById(ADHYANT_MAIN_SPREADSHEET_ID);
+}
+
+/**
+ * One tab per storage domain. Legacy names (e.g. TestSubmissions) rename to canonical on first open.
+ */
+function getOrCreateStorageSheet(canonicalName, legacyNames, setupIfNewSheet) {
+  var ss = openAdhyantSpreadsheet();
+  var sheet = ss.getSheetByName(canonicalName);
+  if (sheet) return sheet;
+  var i;
+  for (i = 0; i < (legacyNames || []).length; i++) {
+    sheet = ss.getSheetByName(legacyNames[i]);
+    if (sheet) {
+      try {
+        sheet.setName(canonicalName);
+      } catch (renameErr) {
+        Logger.log('Sheet tab rename skipped: ' + renameErr.toString());
+      }
+      return ss.getSheetByName(canonicalName) || sheet;
+    }
+  }
+  sheet = ss.insertSheet(canonicalName);
+  if (setupIfNewSheet) setupIfNewSheet(sheet);
+  return sheet;
+}
+
+function getDriveFolderByPreferredName(preferredName, legacyNames) {
+  var drive = DriveApp;
+  var it = drive.getFoldersByName(preferredName);
+  if (it.hasNext()) return it.next();
+  var j;
+  for (j = 0; j < (legacyNames || []).length; j++) {
+    it = drive.getFoldersByName(legacyNames[j]);
+    if (it.hasNext()) {
+      var f = it.next();
+      try {
+        f.setName(preferredName);
+      } catch (e2) {
+        Logger.log('Drive folder rename skipped: ' + e2.toString());
+      }
+      return f;
+    }
+  }
+  return drive.createFolder(preferredName);
+}
+
+function getOrCreateChildFolder(parentFolder, folderName) {
+  var n = truncateDriveName(folderName, DRIVE_LABEL_MAX_LEN);
+  var it = parentFolder.getFoldersByName(n);
+  if (it.hasNext()) return it.next();
+  return parentFolder.createFolder(n);
+}
+
+function truncateDriveName(s, maxLen) {
+  var m = maxLen != null ? maxLen : DRIVE_LABEL_MAX_LEN;
+  var t = String(s || '');
+  if (t.length <= m) return t;
+  return t.substring(0, Math.max(1, m - 5)) + '_TRNC';
+}
+
+function sanitizeDriveSegment(raw, maxChars) {
+  var s = String(raw || '').replace(/[/\\?%*:|"<>]/g, '-').replace(/\s+/g, '_').replace(/_+/g, '_');
+  if (maxChars && s.length > maxChars) s = s.substring(0, maxChars);
+  return s || 'Unknown';
+}
+
+/** Student prefix for Drive paths and filenames: Student_<Name>_Mob<phone>. */
+function studentNameMobileTagFromMetadata(metadata) {
+  var name = sanitizeDriveSegment((metadata && metadata.studentName) || 'Unknown', 40);
+  var digits = String((metadata && metadata.studentPhone) || '').replace(/\D/g, '').substring(0, 15);
+  if (!digits) digits = 'NoMobile';
+  return truncateDriveName('Student_' + name + '_Mob' + digits, 90);
+}
+
+function studentNameMobileTagFromParts(studentName, studentPhone) {
+  return studentNameMobileTagFromMetadata({
+    studentName: studentName || 'Unknown',
+    studentPhone: studentPhone || ''
+  });
+}
+
+function buildOnlineTestSessionFolderLabel(metadata, submissionKey) {
+  var tag = studentNameMobileTagFromMetadata(metadata);
+  var datePart = Utilities.formatDate(new Date(), 'Asia/Kolkata', 'yyyy-MM-dd');
+  var testCode = String((metadata && metadata.testCode) || '').trim().toUpperCase() || 'NoCode';
+  var keyShort = String(submissionKey || '').substring(0, 8);
+  return truncateDriveName(tag + '__Date_' + datePart + '__Test_' + testCode + '__Key_' + keyShort, DRIVE_LABEL_MAX_LEN);
+}
+
+function fileNameStudentSubmissionMeta(metadata) {
+  return truncateDriveName(studentNameMobileTagFromMetadata(metadata) + '_submission_metadata.json', DRIVE_LABEL_MAX_LEN);
+}
+
+function fileNameStudentRecording(metadata) {
+  return truncateDriveName(studentNameMobileTagFromMetadata(metadata) + '_recording.webm', DRIVE_LABEL_MAX_LEN);
+}
+
 // Main function to handle POST requests
 function doPost(e) {
   try {
@@ -19,13 +131,26 @@ function doPost(e) {
     } catch (parseErr) {
       return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Invalid JSON' })).setMimeType(ContentService.MimeType.JSON);
     }
-    // Test submission: zip + metadata (from online test)
+    // Online test: metadata JSON first (always), then video in separate request — same submissionKey
+    if (data.action === 'submitTestMetadata' && data.metadata) {
+      return doPostSubmitTestMetadata(data);
+    }
+    if (data.action === 'submitTestVideo' && data.videoBase64 && data.submissionKey) {
+      return doPostSubmitTestVideo(data);
+    }
+    // Test submission: zip + metadata (from online test) — legacy single upload
     if (data.zipBase64 && data.metadata) {
       return doPostTestSubmission(data);
     }
-    // Create question paper (admin only)
+    // Create question paper (admin only) — text/metadata only; images via uploadPaperQuestionImage
     if (data.action === 'createPaper' && data.adminSecret && data.name) {
       return doPostCreateQuestionPaper(data);
+    }
+    if (data.action === 'uploadPaperAnswerKey' && data.adminSecret && data.paperId && Array.isArray(data.keyQuestions)) {
+      return doPostUploadPaperAnswerKey(data);
+    }
+    if (data.action === 'uploadPaperQuestionImage' && data.adminSecret && data.paperId) {
+      return doPostUploadPaperQuestionImage(data);
     }
     // Test feedback (rating + comment) – store in sheet and in Drive folder
     if (data.action === 'submitFeedback') {
@@ -83,6 +208,17 @@ function doPost(e) {
 }
 
 /**
+ * Sheet "Score" column: numeric score when computed; otherwise admin-only note (e.g. missing answer key).
+ */
+function scoreDisplayForSubmissionRow(metadata) {
+  var m = metadata || {};
+  if (m.score != null && m.score !== '') return m.score;
+  var msg = (m.scoreMessage || '').toString().trim();
+  if (msg) return msg;
+  return '';
+}
+
+/**
  * Handle online test submission: save zip (recording + metadata) to Google Drive.
  * Writes a row as "pending" first, then uploads with up to 3 retries; updates row to uploaded or failed.
  * Expects JSON: { zipBase64: "...", metadata: { studentName, studentEmail, studentAdhar, ... } }
@@ -94,22 +230,26 @@ function doPostTestSubmission(data) {
     metadata = data.metadata || {};
     var studentName = (metadata.studentName || 'Unknown').replace(/[/\\?%*:|"<>]/g, '-');
     timestamp = Utilities.formatDate(new Date(), 'Asia/Kolkata', 'yyyy-MM-dd_HH-mm-ss');
-    fileName = 'Test_' + studentName + '_' + timestamp + '.zip';
+    var stuTag = studentNameMobileTagFromMetadata(metadata);
+    fileName = truncateDriveName(stuTag + '_TestRecording_' + timestamp + '.zip', DRIVE_LABEL_MAX_LEN);
 
     var zipBytes = Utilities.base64Decode(zipBase64);
     zipBlob = Utilities.newBlob(zipBytes).setContentType('application/zip').setName(fileName);
-    folder = getOrCreateTestSubmissionsFolder();
+    var rootZip = getOrCreateTestSubmissionsFolder();
+    var zipFolderLabel = truncateDriveName(stuTag + '__LegacyZip_' + timestamp, DRIVE_LABEL_MAX_LEN);
+    folder = rootZip.createFolder(zipFolderLabel);
     sheet = getOrCreateTestSubmissionsSheet();
 
     var testCode = (metadata.testCode || '').toString().trim().toUpperCase();
     // Append row as pending first so admin sees "Pending" while upload runs
+    var secZip = (metadata.secondaryCode || '').toString().trim().toUpperCase();
     sheet.appendRow([
       timestamp,
       metadata.studentName || '',
       metadata.studentEmail || '',
       metadata.studentAdhar || '',
       metadata.studentPhone || '',
-      metadata.score != null ? metadata.score : '',
+      scoreDisplayForSubmissionRow(metadata),
       metadata.totalQuestions != null ? metadata.totalQuestions : '',
       metadata.isMobile === true ? 'Yes' : 'No',
       metadata.events ? JSON.stringify(metadata.events) : '',
@@ -117,7 +257,12 @@ function doPostTestSubmission(data) {
       fileName,
       '',
       'pending',
-      testCode
+      '',
+      testCode,
+      '',
+      '',
+      folder.getId(),
+      secZip
     ]);
     lastRow = sheet.getLastRow();
 
@@ -178,7 +323,7 @@ function doPostTestSubmission(data) {
         'Student Name : ' + (metadata.studentName || '—') + '\n' +
         'Email        : ' + (metadata.studentEmail || '—') + '\n' +
         'Phone        : ' + (metadata.studentPhone || '—') + '\n' +
-        'Score        : ' + (metadata.score != null ? metadata.score : '—') + ' / ' + (metadata.totalQuestions != null ? metadata.totalQuestions : '—') + '\n' +
+        'Score        : ' + (metadata.score != null ? metadata.score : (metadata.scoreMessage || '—')) + ' / ' + (metadata.totalQuestions != null ? metadata.totalQuestions : '—') + '\n' +
         'Mobile       : ' + (metadata.isMobile === true ? 'Yes' : 'No') + '\n' +
         'Timestamp    : ' + timestamp + '\n' +
         'File         : ' + fileName + '\n' +
@@ -210,6 +355,96 @@ function doPostTestSubmission(data) {
   }
 }
 
+function getOrCreateQuestionPaperImagesRootFolder() {
+  return getDriveFolderByPreferredName('Adhyant_Storage_QuestionPaperImages', ['Adhyant_QuestionPaperImages']);
+}
+
+function findQuestionPaperRowById(sheet, paperId) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return -1;
+  var want = String(paperId || '').trim();
+  var colA = sheet.getRange(2, 1, lastRow, 1).getValues();
+  var ri;
+  for (ri = 0; ri < colA.length; ri++) {
+    if (String(colA[ri][0]).trim() === want) return ri + 2;
+  }
+  return -1;
+}
+
+function getOrCreatePaperImageSubfolder(paperId, paperDisplayName) {
+  var root = getOrCreateQuestionPaperImagesRootFolder();
+  var safeName = sanitizeDriveSegment(paperDisplayName || 'Paper', 55);
+  var safeId = sanitizeDriveSegment(String(paperId || ''), 35);
+  var folderName = truncateDriveName('Paper_' + safeName + '__ID_' + safeId, DRIVE_LABEL_MAX_LEN);
+  var it = root.getFoldersByName(folderName);
+  if (it.hasNext()) return it.next();
+  var leg = root.getFoldersByName(String(paperId || '').trim());
+  if (leg.hasNext()) {
+    var fold = leg.next();
+    try {
+      fold.setName(folderName);
+    } catch (eRen) {}
+    return fold;
+  }
+  return root.createFolder(folderName);
+}
+
+/**
+ * One question image per request (avoids multi‑MB POST body limits on Apps Script / proxies).
+ */
+function doPostUploadPaperQuestionImage(data) {
+  try {
+    var adminSecret = data.adminSecret || '';
+    var storedSecret = PropertiesService.getScriptProperties().getProperty('ADMIN_SECRET') || '';
+    if (!adminSecret || adminSecret !== storedSecret) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Unauthorized' })).setMimeType(ContentService.MimeType.JSON);
+    }
+    var paperId = String(data.paperId || '').trim();
+    var qIndex = parseInt(data.questionIndex, 10);
+    var b64 = data.imageBase64;
+    if (!paperId || isNaN(qIndex) || qIndex < 0 || !b64 || String(b64).length < 20) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Invalid image upload payload' })).setMimeType(ContentService.MimeType.JSON);
+    }
+    var sheet = getOrCreateQuestionPapersSheet();
+    var row = findQuestionPaperRowById(sheet, paperId);
+    if (row < 0) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Paper not found' })).setMimeType(ContentService.MimeType.JSON);
+    }
+    var questionsJson = sheet.getRange(row, 5).getValue();
+    var questions = [];
+    try {
+      questions = questionsJson ? JSON.parse(String(questionsJson)) : [];
+    } catch (e) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Invalid stored questions' })).setMimeType(ContentService.MimeType.JSON);
+    }
+    if (!Array.isArray(questions) || qIndex >= questions.length) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Bad question index' })).setMimeType(ContentService.MimeType.JSON);
+    }
+    var paperDisplayName = String(sheet.getRange(row, 2).getValue() || 'Untitled').trim() || 'Untitled';
+    var folder = getOrCreatePaperImageSubfolder(paperId, paperDisplayName);
+    var bytes = Utilities.base64Decode(String(b64));
+    var paperFilePrefix = truncateDriveName('Paper_' + sanitizeDriveSegment(paperDisplayName, 40) + '__ID_' + sanitizeDriveSegment(paperId, 30) + '_Q' + (qIndex + 1), DRIVE_LABEL_MAX_LEN - 5) + '.jpg';
+    var blob = Utilities.newBlob(bytes, 'image/jpeg', paperFilePrefix);
+    var file = folder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    var q = questions[qIndex];
+    if (!q || typeof q !== 'object') {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Invalid question slot' })).setMimeType(ContentService.MimeType.JSON);
+    }
+    q.imageFileId = file.getId();
+    delete q.imageBase64;
+    delete q.questionImage;
+    var outJson = JSON.stringify(questions);
+    if (outJson.length > 50000) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Question set too large for sheet cell after adding image' })).setMimeType(ContentService.MimeType.JSON);
+    }
+    sheet.getRange(row, 5).setValue(outJson);
+    return ContentService.createTextOutput(JSON.stringify({ status: 'success', questionIndex: qIndex, imageFileId: q.imageFileId })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
 function doPostCreateQuestionPaper(data) {
   try {
     var adminSecret = data.adminSecret || '';
@@ -224,53 +459,403 @@ function doPostCreateQuestionPaper(data) {
     var createdBy = (data.adminEmail || '').toString().trim();
     var questions = data.questions;
     if (!Array.isArray(questions)) questions = [];
+    var qi;
+    for (qi = 0; qi < questions.length; qi++) {
+      var q = questions[qi];
+      if (!q || typeof q !== 'object') continue;
+      delete q.imageBase64;
+      delete q.questionImage;
+    }
     var questionsJson = JSON.stringify(questions);
     if (questionsJson.length > 50000) {
       return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Question set too large' })).setMimeType(ContentService.MimeType.JSON);
     }
-    sheet.appendRow([id, name, createdAt, createdBy, questionsJson]);
+    var durationMinutes = Number(data.durationMinutes);
+    if (isNaN(durationMinutes) || durationMinutes < 1) durationMinutes = 30;
+    if (durationMinutes > 600) durationMinutes = 600;
+    var paperMetaStr = (data.paperMeta || '').toString().trim();
+    if (paperMetaStr.length > 12000) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'PaperMetaJson too large' })).setMimeType(ContentService.MimeType.JSON);
+    }
+    var keyCol = 'No';
+    if (data.answerKeyPresent === true || String(data.answerKeyPresent || '').toLowerCase() === 'yes') {
+      keyCol = 'Yes';
+    }
+    sheet.appendRow([id, name, createdAt, createdBy, questionsJson, durationMinutes, paperMetaStr, keyCol]);
     return ContentService.createTextOutput(JSON.stringify({ status: 'success', id: id })).setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
   }
 }
 
-function getOrCreateTestSubmissionsFolder() {
-  var drive = DriveApp;
-  var folderName = 'Adhyant_Test_Submissions';
-  var folders = drive.getFoldersByName(folderName);
-  if (folders.hasNext()) {
-    return folders.next();
-  }
-  return drive.createFolder(folderName);
-}
-
 /**
- * Feedback folder on Drive: Adhyant_Test_Feedback (separate directory for feedback files).
+ * Merge answers from a separate answer-key PDF (client-parsed) into QuestionsJson; set AnswerKeyPresent = Yes.
  */
-function getOrCreateTestFeedbackFolder() {
-  var drive = DriveApp;
-  var folderName = 'Adhyant_Test_Feedback';
-  var folders = drive.getFoldersByName(folderName);
-  if (folders.hasNext()) {
-    return folders.next();
+function doPostUploadPaperAnswerKey(data) {
+  try {
+    var adminSecret = data.adminSecret || '';
+    var storedSecret = PropertiesService.getScriptProperties().getProperty('ADMIN_SECRET') || '';
+    if (!adminSecret || adminSecret !== storedSecret) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Unauthorized' })).setMimeType(ContentService.MimeType.JSON);
+    }
+    var paperId = (data.paperId || '').toString().trim();
+    if (!paperId) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'paperId required' })).setMimeType(ContentService.MimeType.JSON);
+    }
+    var updates = data.keyQuestions;
+    if (!Array.isArray(updates) || updates.length === 0) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'keyQuestions array required' })).setMimeType(ContentService.MimeType.JSON);
+    }
+    var sheet = getOrCreateQuestionPapersSheet();
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Paper not found' })).setMimeType(ContentService.MimeType.JSON);
+    }
+    var numCols = Math.max(8, sheet.getLastColumn());
+    var rowData = sheet.getRange(2, 1, lastRow, numCols).getValues();
+    var i;
+    var foundRow = -1;
+    var questions = [];
+    for (i = 0; i < rowData.length; i++) {
+      if (String(rowData[i][0]).trim() === paperId) {
+        foundRow = i + 2;
+        var qj = rowData[i][4] ? String(rowData[i][4]) : '[]';
+        try {
+          questions = JSON.parse(qj);
+        } catch (e) {
+          questions = [];
+        }
+        break;
+      }
+    }
+    if (foundRow < 0) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Paper not found' })).setMimeType(ContentService.MimeType.JSON);
+    }
+    if (!Array.isArray(questions) || questions.length === 0) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Paper has no questions' })).setMimeType(ContentService.MimeType.JSON);
+    }
+    var ui;
+    var merged = 0;
+    for (ui = 0; ui < updates.length; ui++) {
+      var k = updates[ui];
+      if (!k || typeof k !== 'object') continue;
+      var pnum = k.paperQuestionNum != null ? Number(k.paperQuestionNum) : NaN;
+      var qidx = k.questionIndex != null ? Number(k.questionIndex) : (k.index != null ? Number(k.index) : NaN);
+      var target = -1;
+      if (!isNaN(pnum) && pnum > 0) {
+        var ti;
+        for (ti = 0; ti < questions.length; ti++) {
+          var pq = questions[ti];
+          if (pq && Number(pq.paperQuestionNum) === pnum) {
+            target = ti;
+            break;
+          }
+        }
+      }
+      if (target < 0 && !isNaN(qidx) && qidx >= 0 && qidx < questions.length) {
+        target = qidx;
+      }
+      // CSV keys often use serial Q1..Qn without paperQuestionNum on each question — match by position
+      if (target < 0 && !isNaN(pnum) && pnum >= 1 && pnum <= questions.length) {
+        target = Math.floor(pnum) - 1;
+      }
+      if (target < 0) continue;
+      if (k.answer !== undefined) {
+        questions[target].answer = k.answer;
+        merged++;
+      }
+      var t = String(k.type || '').toLowerCase();
+      if (t === 'mcq' || t === 'integer') {
+        questions[target].type = t;
+      }
+      if (Array.isArray(k.options) && k.options.length > 0) {
+        questions[target].options = k.options;
+      }
+      if (k.min != null && !isNaN(Number(k.min))) {
+        questions[target].min = Number(k.min);
+      }
+      if (k.max != null && !isNaN(Number(k.max))) {
+        questions[target].max = Number(k.max);
+      }
+    }
+    if (merged === 0) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'No answers matched any question (use paperQuestionNum or question index order)' })).setMimeType(ContentService.MimeType.JSON);
+    }
+    var newJson = JSON.stringify(questions);
+    if (newJson.length > 50000) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Question set too large after merge' })).setMimeType(ContentService.MimeType.JSON);
+    }
+    sheet.getRange(foundRow, 5).setValue(newJson);
+    if (sheet.getLastColumn() < 8) {
+      sheet.getRange(1, 8).setValue('AnswerKeyPresent').setFontWeight('bold');
+    }
+    sheet.getRange(foundRow, 8).setValue('Yes');
+    SpreadsheetApp.flush();
+    return ContentService.createTextOutput(JSON.stringify({ status: 'success', merged: merged, paperId: paperId })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
   }
-  return drive.createFolder(folderName);
+}
+
+/** Legacy single-zip test submissions (older client flow). */
+function getOrCreateTestSubmissionsFolder() {
+  return getDriveFolderByPreferredName('Adhyant_Storage_LegacyZipSubmissions', ['Adhyant_Test_Submissions']);
 }
 
 /**
- * Feedback sheet – columns: Timestamp, Rating, RatingLabel, Comment, Student Name, Student Email, Student Phone, Drive status.
+ * Per-attempt uploads: metadata JSON + recording.webm, grouped under structured student folders.
+ */
+function getOrCreateOnlineTestUploadsRootFolder() {
+  return getDriveFolderByPreferredName('Adhyant_Storage_OnlineTest_Uploads', ['Adhyant_OnlineTest_Uploads']);
+}
+
+/**
+ * Step 1: create session subfolder, save submission_metadata.json, append sheet row (video pending).
+ */
+function doPostSubmitTestMetadata(data) {
+  var sheet;
+  var lastRow;
+  try {
+    var metadata = data.metadata || {};
+    var submissionKey = (data.submissionKey || '').toString().trim();
+    if (!submissionKey) {
+      submissionKey = Utilities.getUuid().replace(/-/g, '').slice(0, 20);
+    }
+    var studentName = (metadata.studentName || 'Unknown').replace(/[/\\?%*:|"<>]/g, '-');
+    var timestamp = Utilities.formatDate(new Date(), 'Asia/Kolkata', 'yyyy-MM-dd_HH-mm-ss');
+    var folderLabel = buildOnlineTestSessionFolderLabel(metadata, submissionKey);
+    var root = getOrCreateOnlineTestUploadsRootFolder();
+    var studentRootTag = studentNameMobileTagFromMetadata(metadata);
+    var studentFolder = getOrCreateChildFolder(root, studentRootTag);
+    var sessionFolder = getOrCreateChildFolder(studentFolder, folderLabel);
+
+    var jsonStr = JSON.stringify(metadata, null, 2);
+    var metaBlob = Utilities.newBlob(jsonStr, 'application/json', fileNameStudentSubmissionMeta(metadata));
+    var metaFile = sessionFolder.createFile(metaBlob);
+
+    var testCode = (metadata.testCode || '').toString().trim().toUpperCase();
+    var secMeta = (metadata.secondaryCode || '').toString().trim().toUpperCase();
+    sheet = getOrCreateTestSubmissionsSheet();
+    sheet.appendRow([
+      timestamp,
+      metadata.studentName || '',
+      metadata.studentEmail || '',
+      metadata.studentAdhar || '',
+      metadata.studentPhone || '',
+      scoreDisplayForSubmissionRow(metadata),
+      metadata.totalQuestions != null ? metadata.totalQuestions : '',
+      metadata.isMobile === true ? 'Yes' : 'No',
+      metadata.events ? JSON.stringify(metadata.events) : '',
+      '',
+      fileNameStudentRecording(metadata),
+      '',
+      'metadata_uploaded',
+      '',
+      testCode,
+      metaFile.getId(),
+      submissionKey,
+      sessionFolder.getId(),
+      secMeta
+    ]);
+    lastRow = sheet.getLastRow();
+
+    try {
+      var sessionsSheet = getOrCreateTestSessionsSheet();
+      var sData = sessionsSheet.getDataRange().getValues();
+      for (var si = 1; si < sData.length; si++) {
+        if (String(sData[si][0]).trim().toUpperCase() === testCode &&
+            String(sData[si][1]).trim().toLowerCase() === String(metadata.studentEmail || '').trim().toLowerCase()) {
+          sessionsSheet.getRange(si + 1, 5).setValue('submitted');
+          break;
+        }
+      }
+    } catch (_) {}
+
+    try {
+      var emailSubject = 'Adhyant: Test metadata received – ' + (metadata.studentName || 'Unknown');
+      var emailBody =
+        'Metadata saved (video may follow separately).\n\n' +
+        'Student Name : ' + (metadata.studentName || '—') + '\n' +
+        'Email        : ' + (metadata.studentEmail || '—') + '\n' +
+        'Phone        : ' + (metadata.studentPhone || '—') + '\n' +
+        'Submission   : ' + submissionKey + '\n' +
+        'Folder ID    : ' + sessionFolder.getId() + '\n' +
+        'Metadata file: ' + metaFile.getId() + '\n';
+      sendTestNotificationEmails(emailSubject, emailBody);
+    } catch (mailErr) {
+      Logger.log('Metadata notification error: ' + mailErr.toString());
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'success',
+      message: 'Metadata saved',
+      submissionKey: submissionKey,
+      metadataFileId: metaFile.getId(),
+      folderId: sessionFolder.getId()
+    })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    Logger.log('submitTestMetadata error: ' + err.toString());
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'error',
+      message: err.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+/**
+ * Step 2: add recording.webm into the same session folder; update sheet row by submissionKey.
+ */
+function doPostSubmitTestVideo(data) {
+  var sheet;
+  try {
+    var submissionKey = (data.submissionKey || '').toString().trim();
+    var videoBase64 = data.videoBase64;
+    if (!submissionKey || !videoBase64) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'submissionKey and videoBase64 required' })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    var metaMin = data.metadata || {};
+    var videoBytes = Utilities.base64Decode(videoBase64);
+    var recName = fileNameStudentRecording(metaMin);
+    var videoBlob = Utilities.newBlob(videoBytes, 'video/webm', recName);
+
+    sheet = getOrCreateTestSubmissionsSheet();
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'No submission row for key' })).setMimeType(ContentService.MimeType.JSON);
+    }
+    var numCols = Math.max(18, sheet.getLastColumn());
+    var rows = sheet.getRange(2, 1, lastRow, numCols).getValues();
+    var found = -1;
+    var keyCol = 16;
+    var folderCol = 17;
+    for (var ri = 0; ri < rows.length; ri++) {
+      if (String(rows[ri][keyCol] || '').trim() === submissionKey) {
+        found = ri + 2;
+        break;
+      }
+    }
+
+    var folder = null;
+    if (found > 0) {
+      var folderId = rows[found - 2][folderCol];
+      if (folderId) {
+        try {
+          folder = DriveApp.getFolderById(String(folderId));
+        } catch (e) {
+          folder = null;
+        }
+      }
+    }
+    if (!folder) {
+      var root2 = getOrCreateOnlineTestUploadsRootFolder();
+      var stuTag2 = studentNameMobileTagFromMetadata(metaMin);
+      var studentFolder2 = getOrCreateChildFolder(root2, stuTag2);
+      var orphanLabel = truncateDriveName(stuTag2 + '__VideoOrphan__Key_' + submissionKey.substring(0, 8), DRIVE_LABEL_MAX_LEN);
+      folder = getOrCreateChildFolder(studentFolder2, orphanLabel);
+    }
+
+    var file = null;
+    var lastError = null;
+    for (var attempt = 1; attempt <= 4; attempt++) {
+      try {
+        file = folder.createFile(videoBlob);
+        break;
+      } catch (e) {
+        lastError = e;
+      }
+    }
+    if (!file) {
+      if (found > 0) {
+        sheet.getRange(found, 13).setValue('video_failed');
+        if (sheet.getLastColumn() >= 14) sheet.getRange(found, 14).setValue((lastError && lastError.toString()) ? lastError.toString() : 'Video upload failed');
+      }
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'error',
+        message: lastError ? lastError.toString() : 'Video upload failed'
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    var fileId = file.getId();
+    var fileSizeBytes = file.getSize ? file.getSize() : (file.getBlob().getBytes().length);
+
+    if (found > 0) {
+      sheet.getRange(found, 10).setValue(fileId);
+      sheet.getRange(found, 11).setValue(recName);
+      sheet.getRange(found, 12).setValue(fileSizeBytes);
+      sheet.getRange(found, 13).setValue('uploaded');
+      if (sheet.getLastColumn() >= 14) sheet.getRange(found, 14).setValue('');
+      var secVid = (metaMin.secondaryCode || '').toString().trim().toUpperCase();
+      if (secVid && sheet.getLastColumn() >= 19) {
+        var curS = String(sheet.getRange(found, 19).getValue() || '').trim();
+        if (!curS) sheet.getRange(found, 19).setValue(secVid);
+      }
+    } else {
+      var timestamp = Utilities.formatDate(new Date(), 'Asia/Kolkata', 'yyyy-MM-dd_HH-mm-ss');
+      var testCode = (metaMin.testCode || '').toString().trim().toUpperCase();
+      var secOrphan = (metaMin.secondaryCode || '').toString().trim().toUpperCase();
+      sheet.appendRow([
+        timestamp,
+        metaMin.studentName || '',
+        metaMin.studentEmail || '',
+        metaMin.studentAdhar || '',
+        metaMin.studentPhone || '',
+        metaMin.score != null ? metaMin.score : '',
+        metaMin.totalQuestions != null ? metaMin.totalQuestions : '',
+        metaMin.isMobile === true ? 'Yes' : 'No',
+        metaMin.events ? JSON.stringify(metaMin.events) : '',
+        fileId,
+        recName,
+        fileSizeBytes,
+        'uploaded',
+        '',
+        testCode,
+        '',
+        submissionKey,
+        folder.getId(),
+        secOrphan
+      ]);
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'success',
+      message: 'Video saved',
+      fileId: fileId
+    })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    Logger.log('submitTestVideo error: ' + err.toString());
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'error',
+      message: err.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+/** Feedback CSV files on Drive, grouped by student name + mobile. */
+function getOrCreateTestFeedbackFolder() {
+  return getDriveFolderByPreferredName('Adhyant_Storage_TestFeedback', ['Adhyant_Test_Feedback']);
+}
+
+/**
+ * Feedback storage tab.
  */
 function getOrCreateFeedbackSheet() {
-  var SPREADSHEET_ID = '1fC7EVW1Gs_y4knbuXRHO_dZ_xb6NIw37PXri-dE55Q8';
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var sheet = ss.getSheetByName('Feedback');
-  if (!sheet) {
-    sheet = ss.insertSheet('Feedback');
-    sheet.getRange(1, 1, 1, 8).setValues([['Timestamp', 'Rating', 'RatingLabel', 'Comment', 'Student Name', 'Student Email', 'Student Phone', 'Drive status']]);
-    sheet.getRange(1, 1, 1, 8).setFontWeight('bold');
-  } else if (sheet.getLastColumn() < 8) {
+  var sheet = getOrCreateStorageSheet('Adhyant_Storage_TestFeedbackRows', ['Feedback'], function (s) {
+    s.getRange(1, 1, 1, 9).setValues([['Timestamp', 'Rating', 'RatingLabel', 'Comment', 'Student Name', 'Student Email', 'Student Phone', 'Class', 'Drive status']]);
+    s.getRange(1, 1, 1, 9).setFontWeight('bold');
+  });
+  if (sheet.getLastColumn() === 8) {
+    var h8 = String(sheet.getRange(1, 8).getValue() || '').trim();
+    if (h8 === 'Drive status') {
+      sheet.insertColumnBefore(8);
+      sheet.getRange(1, 8).setValue('Class').setFontWeight('bold');
+    }
+  }
+  if (sheet.getLastColumn() < 8) {
     sheet.getRange(1, 8).setValue('Drive status').setFontWeight('bold');
+  }
+  if (sheet.getLastColumn() < 9) {
+    sheet.getRange(1, 9).setValue('Drive status').setFontWeight('bold');
   }
   return sheet;
 }
@@ -289,26 +874,28 @@ function doPostFeedback(data) {
     var studentName = (data.studentName || '').toString().trim();
     var studentEmail = (data.studentEmail || '').toString().trim();
     var studentPhone = (data.studentPhone || '').toString().trim();
+    var studentClassFb = (data.studentClass || data.class || '').toString().trim();
     var timestamp = Utilities.formatDate(new Date(), 'Asia/Kolkata', 'yyyy-MM-dd HH:mm:ss');
     var ratingLabel = RATING_LABELS[rating] || '';
 
     sheet = getOrCreateFeedbackSheet();
-    sheet.appendRow([timestamp, rating, ratingLabel, comment, studentName, studentEmail, studentPhone, 'pending']);
+    sheet.appendRow([timestamp, rating, ratingLabel, comment, studentName, studentEmail, studentPhone, studentClassFb, 'pending']);
     lastRow = sheet.getLastRow();
 
-    folder = getOrCreateTestFeedbackFolder();
-    var safeName = (studentName || 'Anonymous').replace(/[/\\?%*:|"<>]/g, '-').substring(0, 50);
+    var feedbackRoot = getOrCreateTestFeedbackFolder();
+    var stuFbTag = studentNameMobileTagFromParts(studentName, studentPhone);
+    folder = getOrCreateChildFolder(feedbackRoot, stuFbTag);
     var fileTimestamp = Utilities.formatDate(new Date(), 'Asia/Kolkata', 'yyyy-MM-dd_HH-mm-ss');
-    var fileName = 'Feedback_' + safeName + '_' + fileTimestamp + '.csv';
-    var csv = 'Timestamp,Rating,RatingLabel,Comment,Student Name,Student Email,Student Phone\n' +
-      '"' + timestamp + '",' + rating + ',"' + ratingLabel.replace(/"/g, '""') + '","' + (comment.replace(/"/g, '""')) + '","' + studentName.replace(/"/g, '""') + '","' + studentEmail.replace(/"/g, '""') + '","' + (studentPhone.replace(/"/g, '""')) + '"';
+    var fileName = truncateDriveName(stuFbTag + '_Feedback_' + fileTimestamp + '.csv', DRIVE_LABEL_MAX_LEN);
+    var csv = 'Timestamp,Rating,RatingLabel,Comment,Student Name,Student Email,Student Phone,Class\n' +
+      '"' + timestamp + '",' + rating + ',"' + ratingLabel.replace(/"/g, '""') + '","' + (comment.replace(/"/g, '""')) + '","' + studentName.replace(/"/g, '""') + '","' + studentEmail.replace(/"/g, '""') + '","' + (studentPhone.replace(/"/g, '""')) + '","' + (studentClassFb.replace(/"/g, '""')) + '"';
     blob = Utilities.newBlob(csv, 'text/csv', fileName);
 
     var file = null;
     var lastError = null;
     for (var attempt = 1; attempt <= 4; attempt++) {
       if (attempt > 1) {
-        sheet.getRange(lastRow, 8).setValue('retry_' + (attempt - 1));
+        sheet.getRange(lastRow, 9).setValue('retry_' + (attempt - 1));
       }
       try {
         file = folder.createFile(blob);
@@ -319,7 +906,7 @@ function doPostFeedback(data) {
     }
 
     if (!file) {
-      sheet.getRange(lastRow, 8).setValue('failed');
+      sheet.getRange(lastRow, 9).setValue('failed');
       Logger.log('Feedback Drive upload failed after 3 retries: ' + (lastError && lastError.toString()));
       return ContentService.createTextOutput(JSON.stringify({
         status: 'error',
@@ -327,7 +914,7 @@ function doPostFeedback(data) {
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
-    sheet.getRange(lastRow, 8).setValue('uploaded');
+    sheet.getRange(lastRow, 9).setValue('uploaded');
 
     return ContentService.createTextOutput(JSON.stringify({
       status: 'success',
@@ -337,7 +924,7 @@ function doPostFeedback(data) {
     Logger.log('Feedback error: ' + err.toString());
     if (sheet && lastRow) {
       try {
-        sheet.getRange(lastRow, 8).setValue('failed');
+        sheet.getRange(lastRow, 9).setValue('failed');
       } catch (_) {}
     }
     return ContentService.createTextOutput(JSON.stringify({
@@ -366,19 +953,20 @@ function sendTestNotificationEmails(subject, body) {
 
 /**
  * Handle sign-up for test (online or offline): store in TestSignUps sheet.
- * Expects JSON: { action: 'testSignUp', fullName, email, phone, testType: 'online'|'offline', testDate, message? }
+ * Expects JSON: { action: 'testSignUp', fullName, email, phone, studentClass?, testType: 'online'|'offline', testDate, message? }
  */
 function doPostTestSignUp(data) {
   try {
     var fullName = (data.fullName || '').toString().trim();
     var email = (data.email || '').toString().trim();
     var phone = (data.phone || '').toString().trim().replace(/\s/g, '');
+    var studentClass = (data.studentClass || data.classOrGrade || data.class || '').toString().trim();
     var testType = (data.testType || 'online').toString().trim();
     var testDate = (data.testDate || '').toString().trim();
     var message = (data.message || '').toString().trim();
     var timestamp = data.timestamp || Utilities.formatDate(new Date(), 'Asia/Kolkata', 'yyyy-MM-dd HH:mm:ss');
     var sheet = getOrCreateTestSignUpsSheet();
-    sheet.appendRow([timestamp, fullName, email, phone, testType, testDate, message]);
+    sheet.appendRow([timestamp, fullName, email, phone, studentClass, testType, testDate, message]);
     try {
       var emailSubject = 'Adhyant: New test form sign-up – ' + (fullName || 'Unknown');
       var emailBody =
@@ -386,6 +974,7 @@ function doPostTestSignUp(data) {
         'Full Name : ' + (fullName || '—') + '\n' +
         'Email     : ' + (email || '—') + '\n' +
         'Phone     : ' + (phone || '—') + '\n' +
+        'Class     : ' + (studentClass || '—') + '\n' +
         'Test Type : ' + (testType || '—') + '\n' +
         'Test Date : ' + (testDate || '—') + '\n' +
         'Message   : ' + (message || '—') + '\n' +
@@ -407,61 +996,102 @@ function doPostTestSignUp(data) {
   }
 }
 
+/** Legacy 7-col layout had Test Type in column E — insert Class before it. */
+function migrateTestSignUpsSheetForClass(sheet) {
+  var lc = sheet.getLastColumn();
+  if (lc >= 8) return;
+  var h5 = String(sheet.getRange(1, 5).getValue() || '').trim();
+  if (lc === 7 && h5 === 'Test Type') {
+    sheet.insertColumnBefore(5);
+    sheet.getRange(1, 5).setValue('Class').setFontWeight('bold');
+  }
+}
+
 function getOrCreateTestSignUpsSheet() {
-  var SPREADSHEET_ID = '1fC7EVW1Gs_y4knbuXRHO_dZ_xb6NIw37PXri-dE55Q8';
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var sheet = ss.getSheetByName('TestSignUps');
-  if (!sheet) {
-    sheet = ss.insertSheet('TestSignUps');
-    sheet.getRange(1, 1, 1, 7).setValues([['Timestamp', 'Full Name', 'Email', 'Phone', 'Test Type', 'Test Date', 'Message']]);
-    sheet.getRange(1, 1, 1, 7).setFontWeight('bold');
-  } else if (sheet.getLastColumn() < 7) {
+  var sheet = getOrCreateStorageSheet('Adhyant_Storage_TestSignUps', ['TestSignUps'], function (s) {
+    s.getRange(1, 1, 1, 8).setValues([['Timestamp', 'Full Name', 'Email', 'Phone', 'Class', 'Test Type', 'Test Date', 'Message']]);
+    s.getRange(1, 1, 1, 8).setFontWeight('bold');
+  });
+  if (sheet.getLastColumn() < 7) {
     sheet.insertColumnAfter(4);
     sheet.getRange(1, 5).setValue('Test Type').setFontWeight('bold');
   }
+  migrateTestSignUpsSheetForClass(sheet);
   return sheet;
 }
 
 function getOrCreateTestSubmissionsSheet() {
-  var SPREADSHEET_ID = '1fC7EVW1Gs_y4knbuXRHO_dZ_xb6NIw37PXri-dE55Q8';
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var sheet = ss.getSheetByName('TestSubmissions');
-  if (!sheet) {
-    sheet = ss.insertSheet('TestSubmissions');
-    sheet.getRange(1, 1, 1, 15).setValues([['Timestamp', 'Student Name', 'Email', 'Aadhaar', 'Phone', 'Score', 'Total', 'Mobile', 'Events', 'File ID', 'File Name', 'File Size (bytes)', 'Video status', 'Upload error', 'Test code']]);
-    sheet.getRange(1, 1, 1, 15).setFontWeight('bold');
-  } else {
-    if (sheet.getLastColumn() < 13) sheet.getRange(1, 13).setValue('Video status').setFontWeight('bold');
-    if (sheet.getLastColumn() < 14) sheet.getRange(1, 14).setValue('Upload error').setFontWeight('bold');
-    if (sheet.getLastColumn() < 15) sheet.getRange(1, 15).setValue('Test code').setFontWeight('bold');
-  }
+  var sheet = getOrCreateStorageSheet('Adhyant_Storage_TestSubmissions', ['TestSubmissions'], function (s) {
+    s.getRange(1, 1, 1, 19).setValues([['Timestamp', 'Student Name', 'Email', 'Aadhaar', 'Phone', 'Score', 'Total', 'Mobile', 'Events', 'File ID', 'File Name', 'File Size (bytes)', 'Video status', 'Upload error', 'Test code', 'Metadata file ID', 'Submission key', 'Drive folder ID', 'Session code']]);
+    s.getRange(1, 1, 1, 19).setFontWeight('bold');
+  });
+  if (sheet.getLastColumn() < 13) sheet.getRange(1, 13).setValue('Video status').setFontWeight('bold');
+  if (sheet.getLastColumn() < 14) sheet.getRange(1, 14).setValue('Upload error').setFontWeight('bold');
+  if (sheet.getLastColumn() < 15) sheet.getRange(1, 15).setValue('Test code').setFontWeight('bold');
+  if (sheet.getLastColumn() < 16) sheet.getRange(1, 16).setValue('Metadata file ID').setFontWeight('bold');
+  if (sheet.getLastColumn() < 17) sheet.getRange(1, 17).setValue('Submission key').setFontWeight('bold');
+  if (sheet.getLastColumn() < 18) sheet.getRange(1, 18).setValue('Drive folder ID').setFontWeight('bold');
+  if (sheet.getLastColumn() < 19) sheet.getRange(1, 19).setValue('Session code').setFontWeight('bold');
   return sheet;
 }
 
+/** Col 15 = test code (index 14), col 13 = status (index 12), col 19 = session (index 18). */
+function submissionExistsForTestAndSession(testCode, sessionCode) {
+  var code = (testCode || '').toString().trim().toUpperCase();
+  var sess = (sessionCode || '').toString().trim().toUpperCase();
+  if (!code || !sess) return false;
+  var sheet = getOrCreateTestSubmissionsSheet();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return false;
+  var numCols = Math.max(19, sheet.getLastColumn());
+  var data = sheet.getRange(2, 1, lastRow, numCols).getValues();
+  var i;
+  for (i = 0; i < data.length; i++) {
+    var row = data[i];
+    if (String(row[14] || '').trim().toUpperCase() !== code) continue;
+    if (String(row[18] || '').trim().toUpperCase() !== sess) continue;
+    var st = String(row[12] || '').trim().toLowerCase();
+    if (st === 'failed' || st.indexOf('video_failed') === 0) continue;
+    if (st.indexOf('retry') === 0) continue;
+    if (st === 'uploaded' || st === 'metadata_uploaded' || st === 'pending') return true;
+  }
+  return false;
+}
+
 function getOrCreateTestSessionsSheet() {
-  var SPREADSHEET_ID = '1fC7EVW1Gs_y4knbuXRHO_dZ_xb6NIw37PXri-dE55Q8';
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var sheet = ss.getSheetByName('TestSessions');
-  if (!sheet) {
-    sheet = ss.insertSheet('TestSessions');
-    sheet.getRange(1, 1, 1, 5).setValues([['Code', 'Email', 'Name', 'StartedAt', 'Status']]);
-    sheet.getRange(1, 1, 1, 5).setFontWeight('bold');
+  var sheet = getOrCreateStorageSheet('Adhyant_Storage_TestSessions', ['TestSessions'], function (s) {
+    s.getRange(1, 1, 1, 7).setValues([['Code', 'Email', 'Name', 'StartedAt', 'Status', 'SecondaryCode', 'Class']]);
+    s.getRange(1, 1, 1, 7).setFontWeight('bold');
+  });
+  if (sheet.getLastColumn() < 6) {
+    sheet.getRange(1, 6).setValue('SecondaryCode').setFontWeight('bold');
+  }
+  if (sheet.getLastColumn() < 7) {
+    sheet.getRange(1, 7).setValue('Class').setFontWeight('bold');
   }
   return sheet;
 }
 
 function getOrCreateTestCodesSheet() {
-  var SPREADSHEET_ID = '1fC7EVW1Gs_y4knbuXRHO_dZ_xb6NIw37PXri-dE55Q8';
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var sheet = ss.getSheetByName('TestCodes');
-  if (!sheet) {
-    sheet = ss.insertSheet('TestCodes');
-    sheet.getRange(1, 1, 1, 5).setValues([['Code', 'CreatedAt', 'CreatedBy', 'QuestionPaperId', 'Started']]);
-    sheet.getRange(1, 1, 1, 5).setFontWeight('bold');
-  } else if (sheet.getLastColumn() < 5) {
+  var sheet = getOrCreateStorageSheet('Adhyant_Storage_TestCodes', ['TestCodes'], function (s) {
+    s.getRange(1, 1, 1, 6).setValues([['Code', 'CreatedAt', 'CreatedBy', 'QuestionPaperId', 'Started', 'Active']]);
+    s.getRange(1, 1, 1, 6).setFontWeight('bold');
+  });
+  if (sheet.getLastColumn() < 5) {
     sheet.getRange(1, 5).setValue('Started').setFontWeight('bold');
   }
+  if (sheet.getLastColumn() < 6 || !sheet.getRange(1, 6).getValue()) {
+    sheet.getRange(1, 6).setValue('Active').setFontWeight('bold');
+  }
   return sheet;
+}
+
+/** Col F Active: Yes (default) = code can be used; No = blocked (validate fails). */
+function parseRowActiveFlag(row) {
+  var cell = row.length >= 6 ? row[5] : null;
+  var v = String(cell != null && cell !== '' ? cell : '').trim().toLowerCase();
+  if (v === 'no' || v === 'false' || v === '0' || v === 'inactive' || v === 'off') return false;
+  return true;
 }
 
 // 3 letter prefix + 6 digit number (e.g. ABC123456)
@@ -475,14 +1105,87 @@ function randomTestCode() {
   return prefix + String(num);
 }
 
+/** Session / resume codes: each row SecondaryCode → PrimaryCode (test code). */
+function getOrCreateResumeCodesSheet() {
+  return getOrCreateStorageSheet('Adhyant_Storage_ResumeCodes', ['ResumeCodes'], function (s) {
+    s.getRange(1, 1, 1, 2).setValues([['SecondaryCode', 'PrimaryCode']]);
+    s.getRange(1, 1, 1, 2).setFontWeight('bold');
+  });
+}
+
+function loadResumeCodesGroupedByPrimary() {
+  var sheet = getOrCreateResumeCodesSheet();
+  var last = sheet.getLastRow();
+  var byPrimary = {};
+  if (last < 2) return byPrimary;
+  var data = sheet.getRange(2, 1, last, 2).getValues();
+  for (var i = 0; i < data.length; i++) {
+    var sec = String(data[i][0] || '').trim().toUpperCase();
+    var prim = String(data[i][1] || '').trim().toUpperCase();
+    if (!prim || !sec) continue;
+    if (!byPrimary[prim]) byPrimary[prim] = [];
+    byPrimary[prim].push(sec);
+  }
+  return byPrimary;
+}
+
+function getSecondaryCodesForPrimary(primaryCode) {
+  var all = loadResumeCodesGroupedByPrimary();
+  var key = String(primaryCode || '').trim().toUpperCase();
+  return all[key] || [];
+}
+
+function loadExistingSecondaryCodeSet() {
+  var sheet = getOrCreateResumeCodesSheet();
+  var last = sheet.getLastRow();
+  var set = {};
+  if (last < 2) return set;
+  var col = sheet.getRange(2, 1, last, 1).getValues();
+  for (var i = 0; i < col.length; i++) {
+    var c = String(col[i][0] || '').trim().toUpperCase();
+    if (c) set[c] = true;
+  }
+  return set;
+}
+
+function randomResumeCode() {
+  var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  var s = '';
+  for (var i = 0; i < 10; i++) {
+    s += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return s;
+}
+
+function generateUniqueResumeCodes(count, existingSet) {
+  var list = [];
+  for (var n = 0; n < count; n++) {
+    var code;
+    var attempts = 0;
+    do {
+      code = randomResumeCode();
+      attempts++;
+    } while (existingSet[code] && attempts < 500);
+    if (existingSet[code]) continue;
+    existingSet[code] = true;
+    list.push(code);
+  }
+  return list;
+}
+
 function getOrCreateQuestionPapersSheet() {
-  var SPREADSHEET_ID = '1fC7EVW1Gs_y4knbuXRHO_dZ_xb6NIw37PXri-dE55Q8';
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var sheet = ss.getSheetByName('QuestionPapers');
-  if (!sheet) {
-    sheet = ss.insertSheet('QuestionPapers');
-    sheet.getRange(1, 1, 1, 5).setValues([['Id', 'Name', 'CreatedAt', 'CreatedBy', 'QuestionsJson']]);
-    sheet.getRange(1, 1, 1, 5).setFontWeight('bold');
+  var sheet = getOrCreateStorageSheet('Adhyant_Storage_QuestionPapers', ['QuestionPapers'], function (s) {
+    s.getRange(1, 1, 1, 8).setValues([['Id', 'Name', 'CreatedAt', 'CreatedBy', 'QuestionsJson', 'DurationMinutes', 'PaperMetaJson', 'AnswerKeyPresent']]);
+    s.getRange(1, 1, 1, 8).setFontWeight('bold');
+  });
+  if (sheet.getLastColumn() < 6 || !sheet.getRange(1, 6).getValue()) {
+    sheet.getRange(1, 6).setValue('DurationMinutes').setFontWeight('bold');
+  }
+  if (sheet.getLastColumn() < 7) {
+    sheet.getRange(1, 7).setValue('PaperMetaJson').setFontWeight('bold');
+  }
+  if (sheet.getLastColumn() < 8) {
+    sheet.getRange(1, 8).setValue('AnswerKeyPresent').setFontWeight('bold');
   }
   return sheet;
 }
@@ -498,7 +1201,7 @@ function doGet(e) {
       if (lastRow < 2) {
         return ContentService.createTextOutput(JSON.stringify({ status: 'success', submissions: [], total: 0 })).setMimeType(ContentService.MimeType.JSON);
       }
-      var numCols = Math.max(14, sheet.getLastColumn());
+      var numCols = Math.max(18, sheet.getLastColumn());
       var data = sheet.getRange(2, 1, lastRow, numCols).getValues();
       var dataFiltered = data.filter(function (row) {
         var first = row[0];
@@ -519,6 +1222,10 @@ function doGet(e) {
         var fileSizeVal = (row.length > 11 && row[11] != null && row[11] !== '') ? Number(row[11]) : null;
         var hasVideoStatus = row.length >= 13 && row[12] !== undefined && row[12] !== '';
         var uploadErrorVal = (row.length > 13 && row[13] != null && row[13] !== '') ? String(row[13]) : '';
+        var testCodeVal = (row.length > 14 && row[14] != null) ? String(row[14]) : '';
+        var metadataFileIdVal = (row.length > 15 && row[15] != null) ? String(row[15]) : '';
+        var submissionKeyVal = (row.length > 16 && row[16] != null) ? String(row[16]) : '';
+        var driveFolderIdVal = (row.length > 17 && row[17] != null) ? String(row[17]) : '';
         return {
           timestamp: row[0],
           studentName: row[1],
@@ -533,7 +1240,11 @@ function doGet(e) {
           fileName: fileNameVal,
           fileSizeBytes: fileSizeVal,
           videoStatus: hasVideoStatus ? String(row[12]) : (fileIdVal ? 'uploaded' : 'pending'),
-          uploadError: uploadErrorVal
+          uploadError: uploadErrorVal,
+          testCode: testCodeVal,
+          metadataFileId: metadataFileIdVal,
+          submissionKey: submissionKeyVal,
+          driveFolderId: driveFolderIdVal
         };
       });
       return ContentService.createTextOutput(JSON.stringify({ status: 'success', submissions: submissions, total: submissions.length })).setMimeType(ContentService.MimeType.JSON);
@@ -548,14 +1259,22 @@ function doGet(e) {
       if (flastRow < 2) {
         return ContentService.createTextOutput(JSON.stringify({ status: 'success', feedback: [], total: 0 })).setMimeType(ContentService.MimeType.JSON);
       }
-      var fnumCols = Math.max(8, feedbackSheet.getLastColumn());
+      var fnumCols = Math.max(9, feedbackSheet.getLastColumn());
       var fdata = feedbackSheet.getRange(2, 1, flastRow, fnumCols).getValues();
       var fdataFiltered = fdata.filter(function (row) {
         var first = row[0];
         return first !== null && first !== undefined && String(first).trim() !== '';
       });
       var feedbackList = fdataFiltered.map(function (row) {
-        var driveStatus = row.length >= 8 && row[7] !== undefined && row[7] !== '' ? String(row[7]) : 'uploaded';
+        var nc = row.length;
+        var driveStatus = 'uploaded';
+        var studentClassOut = null;
+        if (nc >= 9) {
+          studentClassOut = row[7] != null ? String(row[7]) : '';
+          driveStatus = row[8] != null && row[8] !== '' ? String(row[8]) : 'uploaded';
+        } else if (nc >= 8) {
+          driveStatus = row[7] != null && row[7] !== '' ? String(row[7]) : 'uploaded';
+        }
         return {
           timestamp: row[0],
           rating: row[1],
@@ -564,6 +1283,7 @@ function doGet(e) {
           studentName: row[4] || '',
           studentEmail: row[5] || '',
           studentPhone: row[6] || '',
+          studentClass: studentClassOut || null,
           driveStatus: driveStatus
         };
       });
@@ -598,8 +1318,23 @@ function doGet(e) {
       var createdAt = Utilities.formatDate(new Date(), 'Asia/Kolkata', 'yyyy-MM-dd HH:mm:ss');
       var createdBy = params.adminEmail || '';
       var questionPaperId = (params.questionPaperId || '').toString().trim();
-      sheet.appendRow([code, createdAt, createdBy, questionPaperId]);
-      return ContentService.createTextOutput(JSON.stringify({ status: 'success', code: code })).setMimeType(ContentService.MimeType.JSON);
+      sheet.appendRow([code, createdAt, createdBy, questionPaperId, '', 'Yes']);
+      var nSecondary = parseInt(String(params.resumeCodeCount != null ? params.resumeCodeCount : params.secondaryCount != null ? params.secondaryCount : '25'), 10);
+      if (isNaN(nSecondary) || nSecondary < 1) nSecondary = 25;
+      if (nSecondary > 5000) nSecondary = 5000;
+      var existingSet = loadExistingSecondaryCodeSet();
+      var secondaryList = generateUniqueResumeCodes(nSecondary, existingSet);
+      var resumeSheet = getOrCreateResumeCodesSheet();
+      var si;
+      for (si = 0; si < secondaryList.length; si++) {
+        resumeSheet.appendRow([secondaryList[si], code]);
+      }
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        code: code,
+        secondaryCodes: secondaryList,
+        secondaryCount: secondaryList.length
+      })).setMimeType(ContentService.MimeType.JSON);
     } catch (err) {
       return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
     }
@@ -610,17 +1345,53 @@ function doGet(e) {
       if (!code) {
         return ContentService.createTextOutput(JSON.stringify({ status: 'success', valid: false })).setMimeType(ContentService.MimeType.JSON);
       }
+      var secondaryParam = (params.secondaryCode || params.resumeCode || '').toString().trim().toUpperCase();
       var sheet = getOrCreateTestCodesSheet();
       var lastRow = sheet.getLastRow();
       if (lastRow < 2) {
         return ContentService.createTextOutput(JSON.stringify({ status: 'success', valid: false })).setMimeType(ContentService.MimeType.JSON);
       }
-      var numCols = Math.max(5, sheet.getLastColumn());
+      var numCols = Math.max(6, sheet.getLastColumn());
       var data = sheet.getRange(2, 1, lastRow, numCols).getValues();
       for (var i = 0; i < data.length; i++) {
         if (String(data[i][0]).trim().toUpperCase() === code) {
+          var questionPaperIdEarly = data[i][3] ? String(data[i][3]).trim() : '';
+          var secondaries = getSecondaryCodesForPrimary(code);
+          if (secondaries.length > 0) {
+            if (!secondaryParam) {
+              return ContentService.createTextOutput(JSON.stringify({
+                status: 'success',
+                valid: false,
+                reason: 'secondary_required'
+              })).setMimeType(ContentService.MimeType.JSON);
+            }
+            if (secondaries.indexOf(secondaryParam) < 0) {
+              return ContentService.createTextOutput(JSON.stringify({
+                status: 'success',
+                valid: false,
+                reason: 'invalid_secondary'
+              })).setMimeType(ContentService.MimeType.JSON);
+            }
+          }
+          if (secondaryParam && submissionExistsForTestAndSession(code, secondaryParam)) {
+            return ContentService.createTextOutput(JSON.stringify({
+              status: 'success',
+              valid: true,
+              alreadySubmitted: true,
+              started: true,
+              questionPaperId: questionPaperIdEarly || null,
+              secondaryRequired: secondaries.length > 0
+            })).setMimeType(ContentService.MimeType.JSON);
+          }
+          if (!parseRowActiveFlag(data[i])) {
+            return ContentService.createTextOutput(JSON.stringify({
+              status: 'success',
+              valid: false,
+              reason: 'inactive'
+            })).setMimeType(ContentService.MimeType.JSON);
+          }
           var rowIndex = i + 2;
-          var questionPaperId = data[i][3] ? String(data[i][3]).trim() : '';
+          var questionPaperId = questionPaperIdEarly;
           var startedCell = sheet.getRange(rowIndex, 5).getValue();
           var startedVal = String(startedCell != null && startedCell !== '' ? startedCell : '').trim().toLowerCase();
           var started = (startedVal === 'yes' || startedVal === 'true' || startedVal === '1');
@@ -628,7 +1399,8 @@ function doGet(e) {
             status: 'success',
             valid: true,
             started: started,
-            questionPaperId: questionPaperId || null
+            questionPaperId: questionPaperId || null,
+            secondaryRequired: secondaries.length > 0
           })).setMimeType(ContentService.MimeType.JSON);
         }
       }
@@ -649,8 +1421,9 @@ function doGet(e) {
       if (lastRow < 2) {
         return ContentService.createTextOutput(JSON.stringify({ status: 'success', codes: [] })).setMimeType(ContentService.MimeType.JSON);
       }
-      var numCols = Math.max(5, sheet.getLastColumn());
+      var numCols = Math.max(6, sheet.getLastColumn());
       var data = sheet.getRange(2, 1, lastRow, numCols).getValues();
+      var byPrimary = loadResumeCodesGroupedByPrimary();
       var codes = data.map(function (row) {
         var col5 = (row.length >= 5) ? row[4] : null;
         var startedVal = String(col5 != null && col5 !== '' ? col5 : '').trim().toLowerCase();
@@ -661,12 +1434,15 @@ function doGet(e) {
         } else {
           createdAt = createdAt != null ? String(createdAt) : '';
         }
+        var ccode = String(row[0]).trim().toUpperCase();
         return {
           code: String(row[0]).trim(),
           createdAt: createdAt,
           createdBy: row[2] ? String(row[2]) : '',
           questionPaperId: row[3] ? String(row[3]).trim() : '',
-          started: started
+          started: started,
+          active: parseRowActiveFlag(row),
+          secondaryCodes: byPrimary[ccode] || []
         };
       });
       return ContentService.createTextOutput(JSON.stringify({ status: 'success', codes: codes })).setMimeType(ContentService.MimeType.JSON);
@@ -706,6 +1482,42 @@ function doGet(e) {
       return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
     }
   }
+  if (action === 'setTestCodeActive') {
+    try {
+      var adminSecret2 = params.adminSecret || '';
+      var storedSecret2 = PropertiesService.getScriptProperties().getProperty('ADMIN_SECRET') || '';
+      if (!adminSecret2 || adminSecret2 !== storedSecret2) {
+        return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Unauthorized' })).setMimeType(ContentService.MimeType.JSON);
+      }
+      var code2 = (params.code || '').toString().trim().toUpperCase();
+      var activeParam = String(params.active != null ? params.active : 'yes').trim().toLowerCase();
+      var setYes = (activeParam === 'yes' || activeParam === 'true' || activeParam === '1' || activeParam === 'on');
+      if (!code2) {
+        return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Code required' })).setMimeType(ContentService.MimeType.JSON);
+      }
+      var sheet2 = getOrCreateTestCodesSheet();
+      var lastRow2 = sheet2.getLastRow();
+      if (lastRow2 < 2) {
+        return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'No codes found' })).setMimeType(ContentService.MimeType.JSON);
+      }
+      var numCols2 = Math.max(6, sheet2.getLastColumn());
+      var data2 = sheet2.getRange(2, 1, lastRow2, numCols2).getValues();
+      for (var j = 0; j < data2.length; j++) {
+        if (String(data2[j][0]).trim().toUpperCase() === code2) {
+          sheet2.getRange(j + 2, 6).setValue(setYes ? 'Yes' : 'No');
+          SpreadsheetApp.flush();
+          return ContentService.createTextOutput(JSON.stringify({
+            status: 'success',
+            message: setYes ? 'Code is open again.' : 'Code closed. Students cannot use it.',
+            active: setYes
+          })).setMimeType(ContentService.MimeType.JSON);
+        }
+      }
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Code not found' })).setMimeType(ContentService.MimeType.JSON);
+    } catch (err2) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err2.toString() })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
   if (action === 'listPapers') {
     try {
       var sheet = getOrCreateQuestionPapersSheet();
@@ -713,9 +1525,15 @@ function doGet(e) {
       if (lastRow < 2) {
         return ContentService.createTextOutput(JSON.stringify({ status: 'success', papers: [] })).setMimeType(ContentService.MimeType.JSON);
       }
-      var data = sheet.getRange(2, 1, lastRow, 4).getValues();
+      var numColsP = Math.max(8, sheet.getLastColumn());
+      var data = sheet.getRange(2, 1, lastRow, numColsP).getValues();
       var papers = data.map(function (row) {
-        return { id: row[0], name: row[1], createdAt: row[2], createdBy: row[3] };
+        var rawAk = row.length > 7 ? row[7] : undefined;
+        var answerKeyPresent = null;
+        if (rawAk !== undefined && rawAk !== null && String(rawAk).trim() !== '') {
+          answerKeyPresent = String(rawAk).trim().toLowerCase() === 'yes';
+        }
+        return { id: row[0], name: row[1], createdAt: row[2], createdBy: row[3], answerKeyPresent: answerKeyPresent };
       });
       return ContentService.createTextOutput(JSON.stringify({ status: 'success', papers: papers })).setMimeType(ContentService.MimeType.JSON);
     } catch (err) {
@@ -724,12 +1542,16 @@ function doGet(e) {
   }
   if (action === 'getPaper' && params.id) {
     try {
+      var adminSecretGetPaper = params.adminSecret || '';
+      var storedSecretGetPaper = PropertiesService.getScriptProperties().getProperty('ADMIN_SECRET') || '';
+      var isAdminFullPaper = adminSecretGetPaper && storedSecretGetPaper && adminSecretGetPaper === storedSecretGetPaper;
       var sheet = getOrCreateQuestionPapersSheet();
       var lastRow = sheet.getLastRow();
       if (lastRow < 2) {
         return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Not found' })).setMimeType(ContentService.MimeType.JSON);
       }
-      var data = sheet.getRange(2, 1, lastRow, 5).getValues();
+      var numCols = Math.max(8, sheet.getLastColumn());
+      var data = sheet.getRange(2, 1, lastRow, numCols).getValues();
       var paperId = (params.id || '').toString().trim();
       for (var i = 0; i < data.length; i++) {
         if (String(data[i][0]).trim() === paperId) {
@@ -738,6 +1560,60 @@ function doGet(e) {
           try {
             questions = JSON.parse(questionsJson);
           } catch (e) {}
+          var dm = data[i][5];
+          var durationMinutes = 30;
+          if (dm !== null && dm !== undefined && dm !== '') {
+            var n = Number(dm);
+            if (!isNaN(n) && n > 0) durationMinutes = n;
+          }
+          var paperMeta = {};
+          if (data[i][6]) {
+            try {
+              paperMeta = JSON.parse(String(data[i][6]));
+            } catch (e) {}
+          }
+          var rawKeyCell = data[i].length > 7 ? data[i][7] : undefined;
+          var hasExplicitKey = rawKeyCell !== undefined && rawKeyCell !== null && String(rawKeyCell).trim() !== '';
+          var answerKeyPresent = false;
+          if (hasExplicitKey) {
+            answerKeyPresent = String(rawKeyCell).trim().toLowerCase() === 'yes';
+          } else {
+            var li;
+            for (li = 0; li < questions.length; li++) {
+              var lq = questions[li];
+              if (!lq || typeof lq !== 'object') continue;
+              if (String(lq.type || 'mcq').toLowerCase() === 'integer') {
+                if (lq.answer !== undefined && lq.answer !== null && lq.answer !== '' && !isNaN(Number(lq.answer))) {
+                  answerKeyPresent = true;
+                  break;
+                }
+              } else if (lq.answer !== undefined && lq.answer !== null && String(lq.answer).trim() !== '') {
+                answerKeyPresent = true;
+                break;
+              }
+            }
+          }
+          var qj;
+          var questionsOut = [];
+          for (qj = 0; qj < questions.length; qj++) {
+            var src = questions[qj];
+            var qq = {};
+            var kkey;
+            for (kkey in src) {
+              if (src.hasOwnProperty(kkey)) {
+                qq[kkey] = src[kkey];
+              }
+            }
+            if (!answerKeyPresent && !isAdminFullPaper) {
+              delete qq.answer;
+              qq.needsAnswerKey = true;
+            }
+            // Thumbnail API embeds reliably in <img>; uc?export=view often returns HTML and shows broken images.
+            if (qq && qq.imageFileId) {
+              qq.imageUrl = 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(String(qq.imageFileId)) + '&sz=w2000';
+            }
+            questionsOut.push(qq);
+          }
           return ContentService.createTextOutput(JSON.stringify({
             status: 'success',
             paper: {
@@ -745,9 +1621,14 @@ function doGet(e) {
               name: data[i][1],
               createdAt: data[i][2],
               createdBy: data[i][3],
-              questions: questions,
+              questions: questionsOut,
               title: data[i][1],
-              durationMinutes: 30
+              durationMinutes: durationMinutes,
+              maxMarks: paperMeta.maxMarks != null ? paperMeta.maxMarks : null,
+              readTimeMinutes: paperMeta.readTimeMinutes != null ? paperMeta.readTimeMinutes : null,
+              instructions: Array.isArray(paperMeta.instructions) ? paperMeta.instructions : [],
+              paperTitleHint: paperMeta.paperTitleHint || null,
+              answerKeyPresent: answerKeyPresent
             }
           })).setMimeType(ContentService.MimeType.JSON);
         }
@@ -762,6 +1643,8 @@ function doGet(e) {
       var code = (params.code || '').toString().trim().toUpperCase();
       var email = (params.email || '').toString().trim();
       var name = (params.name || '').toString().trim();
+      var secStart = (params.secondaryCode || '').toString().trim().toUpperCase();
+      var studentClassStart = (params.studentClass || params.class || '').toString().trim();
       if (!code) {
         return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Code required' })).setMimeType(ContentService.MimeType.JSON);
       }
@@ -774,10 +1657,16 @@ function doGet(e) {
           sessionsSheet.getRange(si + 1, 3).setValue(name);
           sessionsSheet.getRange(si + 1, 4).setValue(startedAt);
           sessionsSheet.getRange(si + 1, 5).setValue('in_progress');
+          if (sessionsSheet.getLastColumn() >= 6) {
+            sessionsSheet.getRange(si + 1, 6).setValue(secStart);
+          }
+          if (sessionsSheet.getLastColumn() >= 7 && studentClassStart) {
+            sessionsSheet.getRange(si + 1, 7).setValue(studentClassStart);
+          }
           return ContentService.createTextOutput(JSON.stringify({ status: 'success', message: 'Test start recorded' })).setMimeType(ContentService.MimeType.JSON);
         }
       }
-      sessionsSheet.appendRow([code, email, name, startedAt, 'in_progress']);
+      sessionsSheet.appendRow([code, email, name, startedAt, 'in_progress', secStart, studentClassStart]);
       return ContentService.createTextOutput(JSON.stringify({ status: 'success', message: 'Test start recorded' })).setMimeType(ContentService.MimeType.JSON);
     } catch (err) {
       return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
@@ -798,13 +1687,18 @@ function doGet(e) {
       var sessionsSheet = getOrCreateTestSessionsSheet();
       var sLast = sessionsSheet.getLastRow();
       if (sLast >= 2) {
-        var sData = sessionsSheet.getRange(2, 1, sLast, 5).getValues();
+        var sCols = Math.max(7, sessionsSheet.getLastColumn());
+        var sData = sessionsSheet.getRange(2, 1, sLast, sCols).getValues();
         for (var si = 0; si < sData.length; si++) {
           if (String(sData[si][0]).trim().toUpperCase() === code && String(sData[si][4]).trim().toLowerCase() === 'in_progress') {
+            var secProg = sData[si].length >= 6 && sData[si][5] != null ? String(sData[si][5]).trim().toUpperCase() : '';
+            var classProg = sData[si].length >= 7 && sData[si][6] != null ? String(sData[si][6]).trim() : '';
             inProgress.push({
               email: String(sData[si][1]).trim(),
               name: String(sData[si][2]).trim(),
-              startedAt: sData[si][3] != null ? String(sData[si][3]) : ''
+              startedAt: sData[si][3] != null ? String(sData[si][3]) : '',
+              secondaryCode: secProg || null,
+              studentClass: classProg || null
             });
           }
         }
@@ -819,12 +1713,14 @@ function doGet(e) {
           var row = subData[ri];
           var rowCode = (row.length >= 15 && row[14] != null && row[14] !== '') ? String(row[14]).trim().toUpperCase() : '';
           if (rowCode === code) {
+            var secSub = row.length >= 19 && row[18] != null ? String(row[18]).trim().toUpperCase() : '';
             submissions.push({
               studentName: row[1] != null ? String(row[1]) : '',
               email: row[2] != null ? String(row[2]) : '',
               score: row[5] != null ? row[5] : '',
               total: row[6] != null ? row[6] : '',
-              timestamp: row[0] != null ? String(row[0]) : ''
+              timestamp: row[0] != null ? String(row[0]) : '',
+              secondaryCode: secSub || null
             });
           }
         }
@@ -841,27 +1737,18 @@ function doGet(e) {
   }
   return ContentService.createTextOutput(JSON.stringify({
     status: 'success',
-    message: 'Adhyant Registration Form Handler. Use ?action=list|download|generateCode|validateCode|listTestCodes|startTest|listPapers|getPaper|listFeedback|recordTestStart|listTestCodeActivity'
+    message: 'Adhyant Registration Form Handler. Use ?action=list|download|generateCode|validateCode|listTestCodes|startTest|setTestCodeActive|listPapers|getPaper|listFeedback|recordTestStart|listTestCodeActivity (ResumeCodes sheet for session codes)'
   })).setMimeType(ContentService.MimeType.JSON);
 }
 
 
 function getOrCreateSheet() {
-    // 🔴 IMPORTANT: PUT YOUR SHEET ID HERE
-    var SPREADSHEET_ID = '1fC7EVW1Gs_y4knbuXRHO_dZ_xb6NIw37PXri-dE55Q8';
-  
-    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    var sheet = ss.getSheetByName('Queries');
-  
-    if (!sheet) {
-      sheet = ss.insertSheet('Queries');
-      setupSheet(sheet);
-    }
-  
+    var sheet = getOrCreateStorageSheet('Adhyant_Storage_Registrations', ['Queries', 'Registrations'], function (s) {
+      setupSheet(s);
+    });
     if (sheet.getLastRow() === 0) {
       setupSheet(sheet);
     }
-  
     return sheet;
   }
 

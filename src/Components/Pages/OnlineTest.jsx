@@ -1,10 +1,24 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "./Navbar";
 import Footer from "./Footer";
-import { getPaperUrl, getScriptPostUrl, getRecordTestStartUrl } from "../../utils/scriptApi";
-import { STORAGE_KEY_QUESTION_PAPER_ID, STORAGE_KEY_TEST_CODE } from "../TestCodeGate";
+import {
+  getPaperUrl,
+  getScriptPostUrl,
+  getRecordTestStartUrl,
+  resolveQuestionImageSrc,
+  getDriveThumbnailFallbackUrl,
+} from "../../utils/scriptApi";
+import { countQuestionsBySection } from "../../utils/pdfQuestionParser";
+import { saveTestProgress, loadTestProgress, clearTestProgress } from "../../utils/onlineTestPersistence";
+import {
+  STORAGE_KEY_QUESTION_PAPER_ID,
+  STORAGE_KEY_TEST_CODE,
+  STORAGE_KEY_SECONDARY_CODE,
+  STORAGE_KEY_ALREADY_SUBMITTED,
+} from "../TestCodeGate";
 import "/src/assets/css/onlineTest.css";
+import adhyantLogo from "../../assets/img/adhyant-logo.png";
 
 const PHASE = { REGISTRATION: "registration", INSTRUCTIONS: "instructions", PERMISSION: "permission", TEST: "test", RESULT: "result" };
 
@@ -38,6 +52,12 @@ function getViewportSize() {
 const DEFAULT_DATA = {
   title: "Online Assessment - PCM + IQ",
   durationMinutes: 6,
+  maxMarks: null,
+  readTimeMinutes: null,
+  paperInstructions: [],
+  paperTitleHint: null,
+  /** When false, answers are not released to the client and scores are not computed (answer key uploaded separately). */
+  answerKeyPresent: true,
   questions: [
     { id: "q1", type: "mcq", question: "The SI unit of force is:", options: ["Joule", "Newton", "Pascal", "Watt"], answer: "Newton" },
     { id: "q2", type: "integer", question: "How many electrons are in a neutral carbon atom? (Enter a whole number)", answer: 6, min: 0, max: 120 },
@@ -66,13 +86,20 @@ export default function OnlineTest() {
             setData({
               title: p.title || p.name || "Online Assessment",
               durationMinutes: p.durationMinutes ?? 6,
+              maxMarks: p.maxMarks != null ? Number(p.maxMarks) : null,
+              readTimeMinutes: p.readTimeMinutes != null ? Number(p.readTimeMinutes) : null,
+              paperInstructions: Array.isArray(p.instructions) ? p.instructions : [],
+              paperTitleHint: p.paperTitleHint || null,
+              answerKeyPresent: p.answerKeyPresent === true,
               questions: p.questions.map((q, i) => ({
                 ...q,
                 id: q.id || "q" + (i + 1),
                 type: q.type === "integer" ? "integer" : "mcq",
-                options: q.options || [],
+                options: Array.isArray(q.options) ? q.options : [],
                 min: q.min != null ? q.min : 0,
-                max: q.max != null ? q.max : 999
+                max: q.max != null ? q.max : 999,
+                imageUrl: resolveQuestionImageSrc(q) || undefined,
+                imageFileId: q.imageFileId || undefined,
               }))
             });
           } else {
@@ -88,22 +115,50 @@ export default function OnlineTest() {
         .then((m) => m.default || m)
         .then((loaded) => {
           if (loaded && Array.isArray(loaded.questions) && loaded.questions.length > 0) {
-            setData({ title: loaded.title || "Online Assessment", durationMinutes: loaded.durationMinutes ?? 6, questions: loaded.questions });
+            setData({
+              title: loaded.title || "Online Assessment",
+              durationMinutes: loaded.durationMinutes ?? 6,
+              maxMarks: null,
+              readTimeMinutes: null,
+              paperInstructions: [],
+              paperTitleHint: null,
+              answerKeyPresent: loaded.answerKeyPresent !== false,
+              questions: loaded.questions
+            });
           }
         })
         .catch(() => {});
     }
   }, []);
-  const { title, durationMinutes, questions } = data;
+
+  const { title, durationMinutes, questions, maxMarks, readTimeMinutes, paperInstructions, answerKeyPresent } = data;
+
+  const sectionBreakdown = useMemo(() => countQuestionsBySection(questions), [questions]);
+  const showSectionBreakdown =
+    sectionBreakdown.length > 1 ||
+    (sectionBreakdown.length === 1 && sectionBreakdown[0].section !== "General");
+  const paletteGroups = useMemo(() => {
+    const groups = [];
+    questions.forEach((q, i) => {
+      const s = (q.section && String(q.section).trim()) || "General";
+      const last = groups[groups.length - 1];
+      if (!last || last.section !== s) groups.push({ section: s, indices: [] });
+      groups[groups.length - 1].indices.push(i);
+    });
+    return groups;
+  }, [questions]);
+  const showPaletteSections = paletteGroups.length > 1 || (paletteGroups[0] && paletteGroups[0].section !== "General");
   const [phase, setPhase] = useState(PHASE.REGISTRATION);
   const [studentName, setStudentName] = useState("");
   const [studentEmail, setStudentEmail] = useState("");
   const [studentPhone, setStudentPhone] = useState("");
+  const [studentClass, setStudentClass] = useState("");
   const [studentAdhar, setStudentAdhar] = useState("");
   const [registrationError, setRegistrationError] = useState("");
   const [answers, setAnswers] = useState({});
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(durationMinutes * 60);
+  // Do not sync timeLeft to durationMinutes in an effect — paper JSON loads async and would reset the timer mid-test.
+  const [timeLeft, setTimeLeft] = useState(() => DEFAULT_DATA.durationMinutes * 60);
   const [recording, setRecording] = useState(null);
   const [recordedBlob, setRecordedBlob] = useState(null);
   const [mediaError, setMediaError] = useState(null);
@@ -112,7 +167,6 @@ export default function OnlineTest() {
   const [faceDetected, setFaceDetected] = useState(false);
   const [lightingOk, setLightingOk] = useState(false);
   const [detectionReady, setDetectionReady] = useState(false);
-  const [violationAlert, setViolationAlert] = useState(null);
   const [showCompletionPopup, setShowCompletionPopup] = useState(false);
   const [feedbackRating, setFeedbackRating] = useState(null);
   const [feedbackComment, setFeedbackComment] = useState("");
@@ -120,6 +174,10 @@ export default function OnlineTest() {
   const [seenQuestions, setSeenQuestions] = useState(() => new Set());
   const [flaggedQuestions, setFlaggedQuestions] = useState(() => new Set());
   const [timerWarning, setTimerWarning] = useState(null);
+  /** Shown on registration when a saved in-progress session exists for this paper + code */
+  const [resumeOffer, setResumeOffer] = useState(null);
+  /** After "Continue test", show remaining time on instructions before camera */
+  const [resumeTimeLeftHint, setResumeTimeLeftHint] = useState(null);
 
   const streamRef = useRef(null);
   const mediaRecorderRef = useRef(null);
@@ -147,6 +205,31 @@ export default function OnlineTest() {
   const phoneInCameraModelRef = useRef(null);
   const lastPhoneFlagRef = useRef(0);
   const recordTestStartSentRef = useRef(false);
+  const lastMultiFaceAlertPermissionRef = useRef(0);
+  const lastMultiFaceAlertTestRef = useRef(0);
+  const permissionPrevFaceCountRef = useRef(0);
+  const testPhasePrevFaceCountRef = useRef(0);
+  /** Consumed once in startRecording to restore timer & start time after resume */
+  const resumeForRecordingRef = useRef(null);
+  /** Latest values for background autosave during TEST */
+  const persistDataRef = useRef({});
+
+  useEffect(() => {
+    if (questions.length === 0) {
+      setResumeOffer(null);
+      return;
+    }
+    if (typeof sessionStorage === "undefined") return;
+    const paperId = sessionStorage.getItem(STORAGE_KEY_QUESTION_PAPER_ID) || "default";
+    const testCode = sessionStorage.getItem(STORAGE_KEY_TEST_CODE) || "";
+    const secondaryCode = sessionStorage.getItem(STORAGE_KEY_SECONDARY_CODE) || "";
+    const snap = loadTestProgress(paperId, testCode, questions.length, secondaryCode);
+    if (snap && snap.timeLeft > 0) {
+      setResumeOffer({ timeLeft: snap.timeLeft, savedAt: snap.savedAt });
+    } else {
+      setResumeOffer(null);
+    }
+  }, [questions.length]);
 
   const currentQ = questions[currentIndex];
   const isMcq = currentQ?.type === "mcq";
@@ -162,13 +245,22 @@ export default function OnlineTest() {
     }
     return value;
   };
+  /** Question has a key for auto-scoring (uploaded ALLEN papers often have no key yet). */
+  const hasGradedKey = (q) => {
+    if (q.type === "integer") return q.answer !== undefined && q.answer !== null && !Number.isNaN(Number(q.answer));
+    return q.answer !== undefined && q.answer !== null && String(q.answer).trim() !== "";
+  };
   const isCorrect = (q) => {
+    if (!hasGradedKey(q)) return false;
     const raw = answers[q.id];
     const normalized = normalizeAnswer(q, raw);
     if (q.type === "integer") return normalized === q.answer;
     return String(raw).trim() === String(q.answer).trim();
   };
-  const score = questions.filter(isCorrect).length;
+  const canComputeScore = answerKeyPresent === true;
+  const gradedQuestions = canComputeScore ? questions.filter(hasGradedKey) : [];
+  const score = canComputeScore ? gradedQuestions.filter(isCorrect).length : null;
+  const gradedQuestionCount = canComputeScore ? gradedQuestions.length : null;
 
   const startMedia = useCallback(async () => {
     setMediaError(null);
@@ -263,9 +355,33 @@ export default function OnlineTest() {
 
         if (faceModelRef.current) {
           const predictions = await faceModelRef.current.estimateFaces(video, false);
-          const hasFace = Array.isArray(predictions) && predictions.length > 0;
-          setFaceDetected(hasFace);
-          drawFaceOverlay(hasFace ? predictions : []);
+          const n = Array.isArray(predictions) ? predictions.length : 0;
+          const prev = permissionPrevFaceCountRef.current;
+          permissionPrevFaceCountRef.current = n;
+          if (n > 1) {
+            setFaceDetected(false);
+            drawFaceOverlay(predictions);
+            if (prev <= 1) {
+              violationsRef.current.push({
+                type: "multiple_faces",
+                faceCount: n,
+                message: "Two or more faces detected. Only one person is allowed to take the test.",
+                timestamp: new Date().toISOString(),
+                permissionPhase: true,
+              });
+            }
+            const now = Date.now();
+            if (now - lastMultiFaceAlertPermissionRef.current > 6000) {
+              lastMultiFaceAlertPermissionRef.current = now;
+              window.alert("Two or more faces detected. Only one person is allowed to take the test.");
+            }
+          } else if (n === 1) {
+            setFaceDetected(true);
+            drawFaceOverlay(predictions);
+          } else {
+            setFaceDetected(false);
+            drawFaceOverlay([]);
+          }
         } else {
           drawFaceOverlay([]);
         }
@@ -308,6 +424,9 @@ export default function OnlineTest() {
 
   const startRecording = useCallback(() => {
     if (!streamRef.current) return;
+    const resume = resumeForRecordingRef.current;
+    resumeForRecordingRef.current = null;
+
     chunksRef.current = [];
     // Target ~100 MB per hour: 100*8*1024*1024/3600 ≈ 233 kbps total → video 180 + audio 48
     const mr = new MediaRecorder(streamRef.current, {
@@ -329,19 +448,36 @@ export default function OnlineTest() {
     mr.start(2000);
     mediaRecorderRef.current = mr;
     setRecording(mr);
-    questionTimesRef.current = [];
-    questionStartTimeRef.current = Date.now();
-    testStartTimeRef.current = Date.now();
+    testPhasePrevFaceCountRef.current = 0;
+
     isMobileRef.current = isMobileDevice();
     lastMobileCheckRef.current = isMobileRef.current;
     initialViewportRef.current = getViewportSize();
-    violationsRef.current = [];
     noFaceCountRef.current = 0;
     blurCountRef.current = 0;
     visibilityHiddenAtRef.current = null;
-    setViolationAlert(null);
+    questionStartTimeRef.current = Date.now();
+
+    if (resume && typeof resume.timeLeft === "number" && resume.timeLeft > 0) {
+      setTimeLeft(resume.timeLeft);
+      testStartTimeRef.current = typeof resume.testStartedAt === "number" ? resume.testStartedAt : Date.now();
+      alert5MinRef.current = resume.timeLeft <= 300;
+      alert1MinRef.current = resume.timeLeft <= 60;
+      mobileAlertShownRef.current = true;
+      recordTestStartSentRef.current = true;
+    } else {
+      questionTimesRef.current = [];
+      testStartTimeRef.current = Date.now();
+      const permissionViolations = violationsRef.current.filter((v) => v && v.permissionPhase === true);
+      violationsRef.current = permissionViolations.slice();
+      recordTestStartSentRef.current = false;
+      setTimeLeft(durationMinutes * 60);
+      alert5MinRef.current = false;
+      alert1MinRef.current = false;
+      mobileAlertShownRef.current = false;
+    }
+
     setPhase(PHASE.TEST);
-    setTimeLeft(durationMinutes * 60);
   }, [durationMinutes]);
 
   useEffect(() => {
@@ -349,17 +485,16 @@ export default function OnlineTest() {
     if (!recordTestStartSentRef.current) {
       recordTestStartSentRef.current = true;
       const code = typeof sessionStorage !== "undefined" ? sessionStorage.getItem(STORAGE_KEY_TEST_CODE) : null;
+      const sec = typeof sessionStorage !== "undefined" ? sessionStorage.getItem(STORAGE_KEY_SECONDARY_CODE) || "" : "";
       if (code) {
-        const url = getRecordTestStartUrl(code, studentEmail || "", studentName || "");
+        const url = getRecordTestStartUrl(code, studentEmail || "", studentName || "", sec, studentClass || "");
         if (url) fetch(url).catch(() => {});
       }
     }
-  }, [phase, studentEmail, studentName]);
+  }, [phase, studentEmail, studentName, studentClass]);
 
   useEffect(() => {
     if (phase !== PHASE.TEST) return;
-    alert5MinRef.current = false;
-    alert1MinRef.current = false;
     timerRef.current = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
@@ -383,14 +518,76 @@ export default function OnlineTest() {
   }, [phase]);
 
   useEffect(() => {
+    if (phase === PHASE.TEST) setResumeTimeLeftHint(null);
+  }, [phase]);
+
+  useEffect(() => {
+    persistDataRef.current = {
+      timeLeft,
+      answers,
+      currentIndex,
+      studentName,
+      studentEmail,
+      studentPhone,
+      studentClass,
+      studentAdhar,
+      durationMinutes,
+      questionCount: questions.length,
+      seenIndices: Array.from(seenQuestions),
+      flaggedIndices: Array.from(flaggedQuestions),
+    };
+  });
+
+  useEffect(() => {
+    if (phase !== PHASE.TEST) return;
+    const paperId =
+      typeof sessionStorage !== "undefined" ? sessionStorage.getItem(STORAGE_KEY_QUESTION_PAPER_ID) || "default" : "default";
+    const testCode = typeof sessionStorage !== "undefined" ? sessionStorage.getItem(STORAGE_KEY_TEST_CODE) || "" : "";
+    const secondaryCode = typeof sessionStorage !== "undefined" ? sessionStorage.getItem(STORAGE_KEY_SECONDARY_CODE) || "" : "";
+
+    const persist = () => {
+      const d = persistDataRef.current;
+      if (!d.questionCount) return;
+      saveTestProgress({
+        paperId,
+        testCode,
+        secondaryCode,
+        timeLeft: d.timeLeft,
+        durationMinutes: d.durationMinutes,
+        questionCount: d.questionCount,
+        answers: d.answers,
+        currentIndex: d.currentIndex,
+        studentName: d.studentName,
+        studentEmail: d.studentEmail,
+        studentPhone: d.studentPhone,
+        studentClass: d.studentClass,
+        studentAdhar: d.studentAdhar,
+        questionTimesSeconds: questionTimesRef.current.slice(),
+        testStartedAt: testStartTimeRef.current,
+        seenIndices: d.seenIndices,
+        flaggedIndices: d.flaggedIndices,
+        violations: violationsRef.current.slice(),
+      });
+    };
+
+    const id = setInterval(persist, 7000);
+    window.addEventListener("pagehide", persist);
+    window.addEventListener("beforeunload", persist);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("pagehide", persist);
+      window.removeEventListener("beforeunload", persist);
+      persist();
+    };
+  }, [phase]);
+
+  useEffect(() => {
     if (phase !== PHASE.TEST || !streamRef.current || !sidePreviewRef.current) return;
     sidePreviewRef.current.srcObject = streamRef.current;
     sidePreviewRef.current.play().catch(() => {});
     if (isMobileRef.current && !mobileAlertShownRef.current) {
       mobileAlertShownRef.current = true;
       violationsRef.current.push({ type: "mobile_device_at_start", timestamp: new Date().toISOString() });
-      setViolationAlert({ message: "You are on a mobile device. This has been recorded.", type: "mobile" });
-      setTimeout(() => setViolationAlert(null), 5000);
     }
   }, [phase]);
 
@@ -408,13 +605,6 @@ export default function OnlineTest() {
             timestamp: new Date().toISOString(),
           };
           violationsRef.current.push(ev);
-          if (durationSec >= 10) {
-            setViolationAlert({ message: `Warning: You were away from the screen for ${Math.round(durationSec)}s. This has been logged.`, type: "away" });
-            setTimeout(() => setViolationAlert(null), 6000);
-          } else if (durationSec >= 2) {
-            setViolationAlert({ message: "Tab/window switch detected. This has been logged.", type: "away" });
-            setTimeout(() => setViolationAlert(null), 4000);
-          }
           visibilityHiddenAtRef.current = null;
         }
       }
@@ -456,8 +646,6 @@ export default function OnlineTest() {
         if (currentlyMobile && !lastMobileCheckRef.current) {
           const ev = { type: "mobile_detected_during_test", timestamp: new Date().toISOString() };
           violationsRef.current.push(ev);
-          setViolationAlert({ message: "Mobile or small screen detected during test. This has been logged.", type: "mobile" });
-          setTimeout(() => setViolationAlert(null), 5000);
         }
         lastMobileCheckRef.current = currentlyMobile;
         isMobileRef.current = currentlyMobile;
@@ -467,8 +655,25 @@ export default function OnlineTest() {
       if (faceModelRef.current && videoReady) {
         try {
           const predictions = await faceModelRef.current.estimateFaces(video, false);
-          const hasFace = Array.isArray(predictions) && predictions.length > 0;
-          if (hasFace) {
+          const n = Array.isArray(predictions) ? predictions.length : 0;
+          const prevN = testPhasePrevFaceCountRef.current;
+          testPhasePrevFaceCountRef.current = n;
+          if (n > 1) {
+            noFaceCountRef.current = 0;
+            if (prevN <= 1) {
+              violationsRef.current.push({
+                type: "multiple_faces",
+                faceCount: n,
+                message: "Two or more faces detected. Only one person is allowed to take the test.",
+                timestamp: new Date().toISOString(),
+              });
+            }
+            const nowTf = Date.now();
+            if (nowTf - lastMultiFaceAlertTestRef.current > 8000) {
+              lastMultiFaceAlertTestRef.current = nowTf;
+              window.alert("Two or more faces detected. Only one person is allowed to take the test.");
+            }
+          } else if (n === 1) {
             noFaceCountRef.current = 0;
           } else {
             noFaceCountRef.current = (noFaceCountRef.current || 0) + 1;
@@ -476,8 +681,6 @@ export default function OnlineTest() {
               noFaceCountRef.current = 0;
               const ev = { type: "looked_away", timestamp: new Date().toISOString() };
               violationsRef.current.push(ev);
-              setViolationAlert({ message: "Warning: Face not detected. Please look at the camera. This has been logged.", type: "looked_away" });
-              setTimeout(() => setViolationAlert(null), 5000);
             }
           }
         } catch (e) {
@@ -486,8 +689,6 @@ export default function OnlineTest() {
             noFaceCountRef.current = 0;
             const ev = { type: "looked_away", timestamp: new Date().toISOString() };
             violationsRef.current.push(ev);
-            setViolationAlert({ message: "Warning: Face not detected. Please look at the camera. This has been logged.", type: "looked_away" });
-            setTimeout(() => setViolationAlert(null), 5000);
           }
         }
       }
@@ -506,8 +707,6 @@ export default function OnlineTest() {
               lastPhoneFlagRef.current = Date.now();
               const ev = { type: "phone_in_camera", device: hasPhone ? "cell phone" : "laptop", timestamp: new Date().toISOString() };
               violationsRef.current.push(ev);
-              setViolationAlert({ message: "Warning: A phone or device was detected in the camera view. This has been logged.", type: "looked_away" });
-              setTimeout(() => setViolationAlert(null), 6000);
             }
           } catch (e) {}
         }
@@ -525,8 +724,6 @@ export default function OnlineTest() {
       blurCountRef.current += 1;
       const ev = { type: "window_blur", count: blurCountRef.current, timestamp: new Date().toISOString() };
       violationsRef.current.push(ev);
-      setViolationAlert({ message: "Window lost focus. Do not switch apps. This has been logged.", type: "away" });
-      setTimeout(() => setViolationAlert(null), 5000);
     };
     window.addEventListener("blur", onBlur);
     return () => window.removeEventListener("blur", onBlur);
@@ -540,13 +737,9 @@ export default function OnlineTest() {
       if (w <= 480 || h <= 480) {
         const ev = { type: "viewport_resized_small", width: w, height: h, timestamp: new Date().toISOString() };
         violationsRef.current.push(ev);
-        setViolationAlert({ message: "Small screen size detected. This has been logged.", type: "mobile" });
-        setTimeout(() => setViolationAlert(null), 5000);
       } else if (initial && ((initial.w > 768 && w <= 768) || (initial.h > 768 && h <= 768))) {
         const ev = { type: "viewport_resized_to_mobile_size", width: w, height: h, timestamp: new Date().toISOString() };
         violationsRef.current.push(ev);
-        setViolationAlert({ message: "Screen resized to mobile size. This has been logged.", type: "mobile" });
-        setTimeout(() => setViolationAlert(null), 5000);
       }
     };
     window.addEventListener("resize", onResize);
@@ -559,9 +752,6 @@ export default function OnlineTest() {
       e.preventDefault();
       const ev = { type: action, timestamp: new Date().toISOString() };
       violationsRef.current.push(ev);
-      const actionLabel = action.replace(/_/g, " ");
-      setViolationAlert({ message: `${actionLabel} is not allowed during the test. This has been logged.`, type: "looked_away" });
-      setTimeout(() => setViolationAlert(null), 4000);
     };
     const onCopy = (e) => preventAndFlag(e, "copy_attempt");
     const onCut = (e) => preventAndFlag(e, "cut_attempt");
@@ -577,6 +767,14 @@ export default function OnlineTest() {
   }, [phase]);
 
   const handleSubmit = useCallback(() => {
+    if (typeof sessionStorage !== "undefined") {
+      const paperId = sessionStorage.getItem(STORAGE_KEY_QUESTION_PAPER_ID) || "default";
+      const testCode = sessionStorage.getItem(STORAGE_KEY_TEST_CODE) || "";
+      const secondaryCode = sessionStorage.getItem(STORAGE_KEY_SECONDARY_CODE) || "";
+      clearTestProgress(paperId, testCode, secondaryCode);
+      sessionStorage.setItem(STORAGE_KEY_ALREADY_SUBMITTED, "1");
+    }
+    setResumeOffer(null);
     if (questionStartTimeRef.current != null && currentIndex >= 0 && currentIndex < questions.length) {
       const elapsed = (Date.now() - questionStartTimeRef.current) / 1000;
       const times = questionTimesRef.current;
@@ -595,80 +793,203 @@ export default function OnlineTest() {
     savedOnceRef.current = true;
     const uploadUrl = import.meta.env.NEXT_PUBLIC_RECORDING_UPLOAD_URL || import.meta.env.VITE_RECORDING_UPLOAD_URL || import.meta.env.VITE_TEST_SUBMISSION_URL;
     const testCode = typeof sessionStorage !== "undefined" ? sessionStorage.getItem(STORAGE_KEY_TEST_CODE) : null;
+    const secondaryCode =
+      typeof sessionStorage !== "undefined" ? sessionStorage.getItem(STORAGE_KEY_SECONDARY_CODE) || "" : "";
     const metadata = {
       studentName: (studentName || "").trim(),
       studentEmail: (studentEmail || "").trim(),
       studentPhone: (studentPhone || "").trim().replace(/\s/g, ""),
+      studentClass: (studentClass || "").trim(),
       studentAdhar: (studentAdhar || "").trim().replace(/\s/g, ""),
       questionTimesSeconds: questionTimesRef.current,
       isMobile: isMobileRef.current,
       events: violationsRef.current,
-      score,
+      score: canComputeScore ? score : null,
+      gradedQuestionCount: canComputeScore ? gradedQuestionCount : null,
+      answerKeyPresent: canComputeScore,
+      ...(canComputeScore
+        ? {}
+        : { scoreStatus: "answer_key_not_present", scoreMessage: "Can't be Computed. Answer Key Not Present." }),
       totalQuestions: questions.length,
       durationMinutes,
       submittedAt: new Date().toISOString(),
       testStartedAt: testStartTimeRef.current ? new Date(testStartTimeRef.current).toISOString() : null,
       testCode: testCode || undefined,
+      secondaryCode: secondaryCode || undefined,
     };
-    const runUpload = (zipBlob) => {
-      if (!uploadUrl) {
-        setUploadStatus("local_only");
-        return;
-      }
-      setUploadStatus("uploading");
-      const isAppsScript = /script\.google\.com|google\.com\/macos\/script/i.test(uploadUrl);
-      if (isAppsScript) {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const base64 = typeof reader.result === "string" ? reader.result.split(",")[1] : "";
-          // text/plain + no-cors avoids CORS preflight; script still receives and parses JSON body
-          const body = JSON.stringify({ zipBase64: base64, metadata });
-          fetch(uploadUrl, {
-            method: "POST",
-            mode: "no-cors",
-            headers: { "Content-Type": "text/plain" },
-            body,
+    const answersByQuestionId = {};
+    questions.forEach((q) => {
+      const v = answers[q.id];
+      if (v !== undefined && v !== "") answersByQuestionId[q.id] = v;
+    });
+    const answersDetailed = questions.map((q) => ({
+      questionId: q.id,
+      paperQuestionNum: q.paperQuestionNum ?? null,
+      section: q.section || null,
+      type: q.type,
+      selected: answers[q.id] !== undefined && answers[q.id] !== "" ? answers[q.id] : null,
+    }));
+
+    const runLocalSave = () =>
+      import("../../utils/recordingDb")
+        .then(({ saveRecording }) =>
+          saveRecording({
+            blob: recordedBlob,
+            score: canComputeScore ? score : null,
+            totalQuestions: questions.length,
+            durationMinutes,
           })
-            .then(() => setUploadStatus("uploaded"))
-            .catch(() => setUploadStatus("upload_failed"));
-        };
-        reader.readAsDataURL(zipBlob);
-      } else {
-        const formData = new FormData();
-        formData.append("zip", zipBlob, `test-${metadata.studentName.replace(/\s+/g, "-")}-${Date.now()}.zip`);
-        formData.append("metadata", JSON.stringify(metadata));
-        fetch(uploadUrl, { method: "POST", body: formData })
+        )
+        .then((id) => setSavedRecordingId(id));
+
+    if (!uploadUrl) {
+      setUploadStatus("local_only");
+      runLocalSave().catch(() => {});
+      return;
+    }
+
+    setUploadStatus("uploading");
+    const isAppsScript = /script\.google\.com|google\.com\/macos\/script/i.test(uploadUrl);
+
+    if (isAppsScript) {
+      const submissionKey = `${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
+      const fullMeta = {
+        ...metadata,
+        submissionKey,
+        answersByQuestionId,
+        answersDetailed,
+        paperTitle: title,
+        ...(maxMarks != null && !Number.isNaN(maxMarks) ? { maxMarks } : {}),
+        ...(readTimeMinutes != null && !Number.isNaN(readTimeMinutes) ? { readTimeMinutes } : {}),
+      };
+      const postPlain = (payload) =>
+        fetch(uploadUrl, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "text/plain" },
+          body: JSON.stringify(payload),
+        });
+      postPlain({ action: "submitTestMetadata", submissionKey, metadata: fullMeta }).catch(() => {});
+      const vReader = new FileReader();
+      vReader.onload = () => {
+        const base64 = typeof vReader.result === "string" ? vReader.result.split(",")[1] : "";
+        postPlain({
+          action: "submitTestVideo",
+          submissionKey,
+          videoBase64: base64,
+          metadata: {
+            studentName: metadata.studentName,
+            studentEmail: metadata.studentEmail,
+            studentAdhar: metadata.studentAdhar,
+            studentPhone: metadata.studentPhone,
+            studentClass: metadata.studentClass,
+            testCode: metadata.testCode,
+            secondaryCode: metadata.secondaryCode,
+          },
+        })
           .then(() => setUploadStatus("uploaded"))
           .catch(() => setUploadStatus("upload_failed"));
-      }
+      };
+      vReader.onerror = () => setUploadStatus("upload_failed");
+      vReader.readAsDataURL(recordedBlob);
+      runLocalSave().catch(() => setUploadStatus("save_failed"));
+      return;
+    }
+
+    const runUpload = (zipBlob) => {
+      const formData = new FormData();
+      formData.append("zip", zipBlob, `test-${metadata.studentName.replace(/\s+/g, "-")}-${Date.now()}.zip`);
+      const zipMeta = { ...metadata, answersByQuestionId, answersDetailed, paperTitle: title };
+      formData.append("metadata", JSON.stringify(zipMeta));
+      fetch(uploadUrl, { method: "POST", body: formData })
+        .then(() => setUploadStatus("uploaded"))
+        .catch(() => setUploadStatus("upload_failed"));
     };
     import("jszip")
       .then(({ default: JSZip }) => {
         const zip = new JSZip();
         zip.file("recording.webm", recordedBlob);
-        zip.file("metadata.json", JSON.stringify(metadata, null, 2));
+        zip.file("metadata.json", JSON.stringify({ ...metadata, answersByQuestionId, answersDetailed, paperTitle: title }, null, 2));
         return zip.generateAsync({ type: "blob" });
       })
       .then((zipBlob) => {
         runUpload(zipBlob);
-        return import("../../utils/recordingDb").then(({ saveRecording }) =>
-          saveRecording({
-            blob: recordedBlob,
-            score,
-            totalQuestions: questions.length,
-            durationMinutes,
-          })
-        );
+        return runLocalSave();
       })
-      .then((id) => setSavedRecordingId(id))
       .catch(() => setUploadStatus("save_failed"));
-  }, [phase, recordedBlob, score, durationMinutes, questions.length, studentName, studentEmail, studentPhone, studentAdhar]);
+  }, [
+    phase,
+    recordedBlob,
+    score,
+    gradedQuestionCount,
+    durationMinutes,
+    questions,
+    answers,
+    title,
+    maxMarks,
+    readTimeMinutes,
+    studentName,
+    studentEmail,
+    studentPhone,
+    studentClass,
+    studentAdhar,
+    canComputeScore,
+    answerKeyPresent,
+  ]);
 
   const formatTime = (s) => {
     const m = Math.floor(s / 60);
     const sec = s % 60;
     return `${m}:${sec < 10 ? "0" : ""}${sec}`;
   };
+
+  const handleDiscardSavedSession = useCallback(() => {
+    if (typeof sessionStorage !== "undefined") {
+      const paperId = sessionStorage.getItem(STORAGE_KEY_QUESTION_PAPER_ID) || "default";
+      const testCode = sessionStorage.getItem(STORAGE_KEY_TEST_CODE) || "";
+      const secondaryCode = sessionStorage.getItem(STORAGE_KEY_SECONDARY_CODE) || "";
+      clearTestProgress(paperId, testCode, secondaryCode);
+    }
+    setResumeOffer(null);
+    setResumeTimeLeftHint(null);
+  }, []);
+
+  const handleResumeFromSnapshot = useCallback(() => {
+    if (typeof sessionStorage === "undefined" || questions.length === 0) return;
+    const paperId = sessionStorage.getItem(STORAGE_KEY_QUESTION_PAPER_ID) || "default";
+    const testCode = sessionStorage.getItem(STORAGE_KEY_TEST_CODE) || "";
+    const secondaryCode = sessionStorage.getItem(STORAGE_KEY_SECONDARY_CODE) || "";
+    const snap = loadTestProgress(paperId, testCode, questions.length, secondaryCode);
+    if (!snap || snap.timeLeft <= 0) {
+      setResumeOffer(null);
+      return;
+    }
+    setStudentName(snap.studentName || "");
+    setStudentEmail(snap.studentEmail || "");
+    setStudentPhone(snap.studentPhone || "");
+    setStudentClass(snap.studentClass || "");
+    setStudentAdhar(snap.studentAdhar || "");
+    setAnswers(snap.answers && typeof snap.answers === "object" ? { ...snap.answers } : {});
+    const idx = Math.max(0, Math.min(Math.floor(snap.currentIndex || 0), questions.length - 1));
+    setCurrentIndex(idx);
+    const qt = Array.isArray(snap.questionTimesSeconds) ? [...snap.questionTimesSeconds] : [];
+    while (qt.length < questions.length) qt.push(undefined);
+    questionTimesRef.current = qt.slice(0, questions.length);
+    violationsRef.current = Array.isArray(snap.violations) ? snap.violations.slice() : [];
+    const startedAt = typeof snap.testStartedAt === "number" ? snap.testStartedAt : Date.now();
+    testStartTimeRef.current = startedAt;
+    recordTestStartSentRef.current = true;
+    resumeForRecordingRef.current = {
+      timeLeft: snap.timeLeft,
+      testStartedAt: startedAt,
+    };
+    setSeenQuestions(new Set(Array.isArray(snap.seenIndices) && snap.seenIndices.length ? snap.seenIndices : [idx]));
+    setFlaggedQuestions(new Set(Array.isArray(snap.flaggedIndices) ? snap.flaggedIndices : []));
+    setResumeTimeLeftHint(snap.timeLeft);
+    setResumeOffer(null);
+    setRegistrationError("");
+    setPhase(PHASE.INSTRUCTIONS);
+  }, [questions.length]);
 
   const goToQuestion = (index) => {
     if (index < 0 || index >= questions.length) return;
@@ -709,6 +1030,10 @@ export default function OnlineTest() {
       setRegistrationError("Please enter a valid 10-digit contact number.");
       return false;
     }
+    if (!(studentClass || "").trim()) {
+      setRegistrationError("Please enter your class / grade (e.g. Class 10, XII Science).");
+      return false;
+    }
     if (!/^\d{12}$/.test(adhar)) {
       setRegistrationError("Aadhaar must be 12 digits.");
       return false;
@@ -724,9 +1049,7 @@ export default function OnlineTest() {
         <div className="online-test-wrapper online-test-registration">
           <div className="online-test-reg-hero">
             <div className="online-test-reg-hero-inner">
-              <span className="online-test-reg-badge">Assessment</span>
-              <h1 className="online-test-reg-title">{title}</h1>
-              <p className="online-test-reg-subtitle">Enter your details below. Your information will be sent securely with your test recording.</p>
+              <h1 className="online-test-reg-title online-test-exam-name">{title}</h1>
             </div>
           </div>
           <div className="container py-4 pb-5">
@@ -737,6 +1060,22 @@ export default function OnlineTest() {
                   <h2 className="online-test-reg-heading">Student details</h2>
                   <p className="online-test-reg-desc">Fill in your details before starting the test.</p>
                 </div>
+                {resumeOffer && (
+                  <div className="online-test-resume-banner" role="status">
+                    <p className="online-test-resume-banner-text">
+                      You have an unfinished attempt for this test.{" "}
+                      <strong>{formatTime(resumeOffer.timeLeft)}</strong> left on the timer — you can continue where you left off.
+                    </p>
+                    <div className="online-test-resume-banner-actions">
+                      <button type="button" className="online-test-reg-btn online-test-resume-continue" onClick={handleResumeFromSnapshot}>
+                        Continue test
+                      </button>
+                      <button type="button" className="online-test-resume-discard" onClick={handleDiscardSavedSession}>
+                        Start over
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {registrationError && <div className="online-test-reg-error">{registrationError}</div>}
                 <div className="online-test-reg-form">
                   <div className="online-test-reg-field">
@@ -768,6 +1107,17 @@ export default function OnlineTest() {
                       value={studentPhone}
                       onChange={(e) => setStudentPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
                       maxLength={10}
+                    />
+                  </div>
+                  <div className="online-test-reg-field">
+                    <label className="online-test-reg-label">Class / grade</label>
+                    <input
+                      type="text"
+                      className="online-test-reg-input"
+                      placeholder="e.g. Class 10, XII Science, 9th"
+                      value={studentClass}
+                      onChange={(e) => setStudentClass(e.target.value)}
+                      maxLength={80}
                     />
                   </div>
                   <div className="online-test-reg-field">
@@ -807,8 +1157,15 @@ export default function OnlineTest() {
         <div className="online-test-wrapper online-test-instructions-wrap">
           <div className="online-test-reg-hero online-test-reg-hero-sm">
             <div className="online-test-reg-hero-inner">
-              <h1 className="online-test-reg-title">{title}</h1>
-              <p className="online-test-reg-subtitle">{questions.length} questions · {durationMinutes} minutes</p>
+              <h1 className="online-test-reg-title online-test-exam-name">{title}</h1>
+              <p className="online-test-reg-subtitle online-test-instr-hero-meta">
+                {questions.length} questions
+                {maxMarks != null && !Number.isNaN(maxMarks) ? ` · ${maxMarks} marks` : ""}
+                {" · "}
+                {readTimeMinutes != null && readTimeMinutes > 0 && readTimeMinutes !== durationMinutes
+                  ? `${durationMinutes} min for this online session`
+                  : `${durationMinutes} min`}
+              </p>
             </div>
           </div>
           <div className="container py-4 pb-5">
@@ -824,13 +1181,94 @@ export default function OnlineTest() {
             ) : (
               <div className="online-test-instructions online-test-instructions-card online-test-no-copy" onContextMenu={(e) => e.preventDefault()}>
                 <div className="online-test-instructions-body">
+                  {resumeTimeLeftHint != null && resumeTimeLeftHint > 0 && (
+                    <div className="online-test-resume-instr-hint" role="status">
+                      Resuming your session — <strong>{formatTime(resumeTimeLeftHint)}</strong> left on the timer. Enable camera and microphone below to continue.
+                    </div>
+                  )}
+                  <div className="online-test-instr-logo-wrap">
+                    <img
+                      src={adhyantLogo}
+                      alt="Adhyant — For You"
+                      className="online-test-instr-logo"
+                      width={280}
+                      height={280}
+                      decoding="async"
+                    />
+                  </div>
                   <h2 className="online-test-instr-title">📋 Instructions</h2>
+                  {(studentName || studentClass) && (
+                    <p className="online-test-instr-student-meta small text-muted mb-3">
+                      {(studentName || "").trim() && (
+                        <>
+                          <strong>Student:</strong> {(studentName || "").trim()}
+                          {(studentClass || "").trim() ? " · " : ""}
+                        </>
+                      )}
+                      {(studentClass || "").trim() && (
+                        <>
+                          <strong>Class:</strong> {(studentClass || "").trim()}
+                        </>
+                      )}
+                    </p>
+                  )}
+                  <div className="online-test-instr-proctor-warning" role="note">
+                    <strong>Important — proctoring (recorded):</strong> This test uses camera and microphone recording. The system also records technical
+                    events for review, including when your face is not visible, tab or window changes, time away from the test, copy/cut/paste attempts, and
+                    certain screen or device changes. Continuing means you understand these checks are active and may be reviewed.
+                  </div>
                   <ul className="online-test-instr-list">
-                    <li>This test has <strong>{questions.length} questions</strong> (MCQ and integer type).</li>
-                    <li>Duration: <strong>{durationMinutes} minutes</strong>. Timer will auto-submit when time ends.</li>
+                    <li>
+                      This test has <strong>{questions.length} questions</strong>
+                      {maxMarks != null && !Number.isNaN(maxMarks) ? (
+                        <>
+                          {" "}
+                          · Maximum marks <strong>{maxMarks}</strong>
+                        </>
+                      ) : null}
+                      {" "}
+                      (multiple choice; integer type if shown).
+                    </li>
+                    <li>
+                      <strong>Time:</strong>{" "}
+                      {readTimeMinutes != null && readTimeMinutes > 0 && readTimeMinutes !== durationMinutes ? (
+                        <>
+                          This online session is <strong>{durationMinutes} minutes</strong> (timer auto-submits when time ends).
+                        </>
+                      ) : (
+                        <>
+                          <strong>{durationMinutes} minutes</strong> total. The timer auto-submits when time ends.
+                        </>
+                      )}
+                    </li>
+                    {showSectionBreakdown && (
+                      <li className="online-test-instr-sections">
+                        <strong>Sections (question counts):</strong>
+                        <ul className="online-test-instr-section-list">
+                          {sectionBreakdown.map(({ section, count }) => (
+                            <li key={section}>
+                              <span className="online-test-instr-section-name">{section}</span>
+                              {" — "}
+                              <strong>{count}</strong> question{count === 1 ? "" : "s"}
+                            </li>
+                          ))}
+                        </ul>
+                      </li>
+                    )}
+                    {paperInstructions.length > 0 && (
+                      <li className="online-test-instr-sections">
+                        <strong>From the question paper (online-relevant):</strong>
+                        <ul className="online-test-instr-section-list online-test-instr-paper-lines">
+                          {paperInstructions.map((line, idx) => (
+                            <li key={idx}>{line}</li>
+                          ))}
+                        </ul>
+                      </li>
+                    )}
+                    <li>Options match the paper: choices are labelled <strong>(1)</strong> through <strong>(4)</strong> where applicable.</li>
                     <li>You need to allow <strong>camera and microphone</strong>. Recording starts when you click &quot;Start Test&quot;.</li>
-                    <li>Do not switch tabs or minimize the window during the test.</li>
-                    <li>Answer all questions. Use the question palette to jump between questions.</li>
+                    <li>Stay on this test window; switching away may be logged (see warning above).</li>
+                    <li>Answer all questions. Use the question palette (grouped by section) to jump between questions.</li>
                   </ul>
                   <button type="button" className="online-test-reg-btn online-test-instr-btn" onClick={startMedia}>
                     I agree, Start Test
@@ -850,6 +1288,11 @@ export default function OnlineTest() {
       <>
         <Navbar />
         <div className="online-test-wrapper online-test-permission-wrap">
+          <div className="online-test-perm-exam-strip">
+            <div className="container">
+              <p className="online-test-perm-exam-title online-test-exam-name online-test-exam-name--compact">{title}</p>
+            </div>
+          </div>
           <div className="container py-4 pb-5">
             {mediaError && (
               <div className="online-test-permission-error">
@@ -923,12 +1366,6 @@ export default function OnlineTest() {
         <Navbar />
         <div className="online-test-wrapper online-test-phase-test online-test-no-copy" onContextMenu={(e) => e.preventDefault()}>
           <div className="container py-4">
-            {violationAlert && (
-              <div className={`online-test-violation-alert ${violationAlert.type === "away" || violationAlert.type === "looked_away" ? "online-test-violation-warn" : "online-test-violation-info"}`} role="alert">
-                {violationAlert.message}
-              </div>
-            )}
-
             {timerWarning && (
               <div className="online-test-timer-warning-overlay" role="dialog" aria-modal="true" aria-labelledby="timer-warning-title">
                 <div className="online-test-timer-warning-card">
@@ -947,7 +1384,7 @@ export default function OnlineTest() {
             )}
 
             <div className="online-test-header">
-              <h1 className="online-test-header-title">{title}</h1>
+              <h1 className="online-test-header-title online-test-exam-name online-test-exam-name--compact">{title}</h1>
               <div className="online-test-header-meta">
                 <span
                   className={`online-test-timer ${timeLeft <= 60 ? "online-test-timer-red" : timeLeft <= 300 ? "online-test-timer-orange" : ""}`}
@@ -968,8 +1405,30 @@ export default function OnlineTest() {
                     <div className="online-test-question-head">
                       <h2 className="online-test-question-num">Question No. {currentIndex + 1}</h2>
                       <p className="online-test-question-meta">Question {currentIndex + 1} of {questions.length}</p>
+                      {currentQ.section && (
+                        <p className="online-test-question-section" title={currentQ.section}>{currentQ.section}</p>
+                      )}
                     </div>
                     <h2 className="online-test-question-text">{currentQ.question}</h2>
+                    {(currentQ.imageUrl || currentQ.questionImage) && (
+                      <div className="online-test-question-image-wrap mb-3">
+                        <img
+                          src={currentQ.imageUrl || currentQ.questionImage}
+                          alt="Question figure"
+                          className="online-test-question-image"
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                          onError={(ev) => {
+                            const el = ev.currentTarget;
+                            const fid = currentQ.imageFileId;
+                            if (fid && el.dataset.imgFallback !== "thumb") {
+                              el.dataset.imgFallback = "thumb";
+                              el.src = getDriveThumbnailFallbackUrl(fid);
+                            }
+                          }}
+                        />
+                      </div>
+                    )}
 
                     {isMcq ? (
                       <div className="online-test-options">
@@ -977,10 +1436,11 @@ export default function OnlineTest() {
                           <button
                             key={i}
                             type="button"
-                            className={`btn btn-outline-primary w-100 text-start mb-2 ${String(answers[currentQ.id]) === String(opt) ? "active" : ""}`}
+                            className={`btn btn-outline-primary w-100 text-start mb-2 online-test-opt-btn ${String(answers[currentQ.id]) === String(opt) ? "active" : ""}`}
                             onClick={() => setAnswer(currentQ.id, opt)}
                           >
-                            {opt}
+                            <span className="online-test-opt-label">({i + 1})</span>
+                            <span className="online-test-opt-text">{opt}</span>
                           </button>
                         ))}
                       </div>
@@ -1051,23 +1511,39 @@ export default function OnlineTest() {
                       <span className="online-test-legend-item answered-flagged">Answered + Marked</span>
                     </div>
                     <div className="online-test-palette-scroll">
-                      <div className="online-test-palette">
-                        {questions.map((q, i) => {
-                          const answered = answers[q.id] !== undefined && answers[q.id] !== "";
-                          const flagged = flaggedQuestions.has(i);
-                          const seen = seenQuestions.has(i);
-                          const statusClass = answered && flagged ? "answered-flagged" : answered ? "answered" : flagged ? "flagged" : seen ? "seen" : "";
-                          return (
-                            <button
-                              key={q.id}
-                              type="button"
-                              className={`palette-btn ${i === currentIndex ? "current" : ""} ${statusClass}`}
-                              onClick={() => goToQuestion(i)}
-                            >
-                              {i + 1}
-                            </button>
-                          );
-                        })}
+                      <div className="online-test-palette online-test-palette-grouped">
+                        {paletteGroups.map((g) => (
+                          <div key={g.section} className="online-test-palette-group">
+                            {showPaletteSections && (
+                              <div className="online-test-palette-group-label" title={g.section}>
+                                {g.section.replace(/^Part-[IVX]+ ·\s*/i, "").slice(0, 28)}
+                                {g.section.length > 28 ? "…" : ""}
+                              </div>
+                            )}
+                            <div className="online-test-palette-group-btns">
+                              {g.indices.map((i) => {
+                                const q = questions[i];
+                                const answered = answers[q.id] !== undefined && answers[q.id] !== "";
+                                const flagged = flaggedQuestions.has(i);
+                                const seen = seenQuestions.has(i);
+                                const statusClass =
+                                  answered && flagged ? "answered-flagged" : answered ? "answered" : flagged ? "flagged" : seen ? "seen" : "";
+                                const label = q.paperQuestionNum != null ? q.paperQuestionNum : i + 1;
+                                return (
+                                  <button
+                                    key={q.id}
+                                    type="button"
+                                    title={`Q ${label}${g.section ? ` · ${g.section}` : ""}`}
+                                    className={`palette-btn ${i === currentIndex ? "current" : ""} ${statusClass}`}
+                                    onClick={() => goToQuestion(i)}
+                                  >
+                                    {label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
@@ -1133,6 +1609,11 @@ export default function OnlineTest() {
               <div className="online-test-result-body">
                 <div className="online-test-result-score-box">
                   <h2 className="online-test-result-title">Test submitted</h2>
+                  {canComputeScore && gradedQuestionCount > 0 ? (
+                    <p className="online-test-result-score">
+                      Your score: {score} / {gradedQuestionCount}
+                    </p>
+                  ) : null}
                   <p className="online-test-result-score">Thank you for completing the test. Results will be shared by the organiser.</p>
                 </div>
                 <h3 className="online-test-result-popup-title mt-3">How was your experience?</h3>
@@ -1174,6 +1655,7 @@ export default function OnlineTest() {
                         studentName: (studentName || "").trim(),
                         studentEmail: (studentEmail || "").trim(),
                         studentPhone: (studentPhone || "").trim(),
+                        studentClass: (studentClass || "").trim(),
                       });
                       fetch(feedbackUrl, {
                         method: "POST",

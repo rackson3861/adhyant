@@ -1,11 +1,13 @@
 import React, { useState } from "react";
-import { Link, NavLink } from "react-router-dom";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import RegistrationModal from "./RegistrationModal";
 import { useAdmin } from "../../context/AdminContext";
 
 export default function Navbar() {
-  const { isAdmin, logoutAdmin } = useAdmin();
+  const { isAdmin } = useAdmin();
+  const location = useLocation();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const onAdminPage = location.pathname === "/admin";
 
   const handleJoinNowClick = () => {
     setIsModalOpen(true);
@@ -43,7 +45,7 @@ export default function Navbar() {
             <NavLink to="/contact" className="nav-item nav-link" activeClassName="active">Contact</NavLink>
             <NavLink to="/test" className="nav-item nav-link nav-link-highlight" activeClassName="active">Take Test</NavLink>
             <NavLink to="/test-form" className="nav-item nav-link nav-link-highlight" activeClassName="active">Upcoming Entrance Exam</NavLink>
-            {isAdmin && (
+            {isAdmin && !onAdminPage && (
               <NavLink to="/admin" className="nav-item nav-link" activeClassName="active">Admin</NavLink>
             )}
             <a
@@ -55,18 +57,9 @@ export default function Navbar() {
             </a>
           </div>
 
-          {isAdmin ? (
-            <>
-              <Link to="/admin" className="btn btn-outline-light py-2 px-3 me-2 d-none d-lg-inline-block">Admin</Link>
-              <button
-                type="button"
-                className="btn btn-outline-light py-2 px-3 d-none d-lg-inline-block"
-                onClick={() => { logoutAdmin(); window.location.href = "/"; }}
-              >
-                Logout
-              </button>
-            </>
-          ) : (
+          {isAdmin && !onAdminPage ? (
+            <Link to="/admin" className="btn btn-outline-light py-2 px-3 d-none d-lg-inline-block">Admin</Link>
+          ) : !isAdmin ? (
             <button
               className="btn btn-primary py-4 px-lg-5 d-none d-lg-block"
               style={{ backgroundColor: "var(--primary)", borderColor: "var(--primary)" }}
@@ -74,7 +67,7 @@ export default function Navbar() {
             >
               Join Now<i className="fa fa-arrow-right ms-3"></i>
             </button>
-          )}
+          ) : null}
         </div>
       </nav>
 

@@ -18,6 +18,7 @@ export default function TestSignUp() {
     fullName: "",
     email: "",
     phone: "",
+    classOrGrade: "",
     testType: "",
     testDate: "",
     message: "",
@@ -26,6 +27,7 @@ export default function TestSignUp() {
     fullName: "",
     email: "",
     phone: "",
+    classOrGrade: "",
     testType: "",
     testDate: "",
   });
@@ -54,7 +56,7 @@ export default function TestSignUp() {
   };
 
   const validateForm = () => {
-    const newErrors = { fullName: "", email: "", phone: "", testType: "", testDate: "" };
+    const newErrors = { fullName: "", email: "", phone: "", classOrGrade: "", testType: "", testDate: "" };
     let isValid = true;
     if (!formData.fullName.trim()) {
       newErrors.fullName = "Full name is required";
@@ -72,6 +74,10 @@ export default function TestSignUp() {
       isValid = false;
     } else if (!validatePhone(formData.phone)) {
       newErrors.phone = "Enter a valid 10-digit mobile number starting with 6-9";
+      isValid = false;
+    }
+    if (!formData.classOrGrade.trim()) {
+      newErrors.classOrGrade = "Please enter your class or grade";
       isValid = false;
     }
     if (!formData.testType) {
@@ -98,6 +104,7 @@ export default function TestSignUp() {
         fullName: formData.fullName.trim(),
         email: formData.email.trim(),
         phone: formData.phone.trim().replace(/\s/g, ""),
+        studentClass: formData.classOrGrade.trim(),
         testType: formData.testType,
         testDate: formData.testDate,
         message: (formData.message || "").trim() || "",
@@ -114,8 +121,8 @@ export default function TestSignUp() {
     setIsLoading(false);
     setSubmittedTestType(formData.testType);
     setIsSubmitted(true);
-    setFormData({ fullName: "", email: "", phone: "", testType: "", testDate: "", message: "" });
-    setErrors({ fullName: "", email: "", phone: "", testType: "", testDate: "" });
+    setFormData({ fullName: "", email: "", phone: "", classOrGrade: "", testType: "", testDate: "", message: "" });
+    setErrors({ fullName: "", email: "", phone: "", classOrGrade: "", testType: "", testDate: "" });
   };
 
   return (
@@ -213,6 +220,20 @@ export default function TestSignUp() {
                         className={`form-control ${errors.phone ? "is-invalid" : ""}`}
                       />
                       {errors.phone && <div className="invalid-feedback">{errors.phone}</div>}
+                    </div>
+                    <div className="form-group mb-3">
+                      <label htmlFor="classOrGrade">Class / grade <span className="required">*</span></label>
+                      <input
+                        type="text"
+                        id="classOrGrade"
+                        name="classOrGrade"
+                        value={formData.classOrGrade}
+                        onChange={handleChange}
+                        placeholder="e.g. Class 10, XII Science, 9th"
+                        maxLength={80}
+                        className={`form-control ${errors.classOrGrade ? "is-invalid" : ""}`}
+                      />
+                      {errors.classOrGrade && <div className="invalid-feedback">{errors.classOrGrade}</div>}
                     </div>
                     <div className="form-group mb-3">
                       <label htmlFor="testDate">Preferred test date <span className="required">*</span></label>
