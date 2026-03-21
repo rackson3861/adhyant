@@ -1,0 +1,1295 @@
+{
+  "paperId": "abquest-class-x-22-03-26",
+  "title": "ABQuest Class X 22 03 26",
+  "durationMinutes": 120,
+  "maxMarks": 320,
+  "readTimeMinutes": 125,
+  "instructions": [
+    "Total time allowed for this online test is 120 minutes. The test will auto-submit when the timer ends."
+  ],
+  "paperTitleHint": null,
+  "sourcePdf": "ABQuest_Class_X_22_03_26.pdf",
+  "answerKeyPresent": false,
+  "questions": [
+    {
+      "id": "q1",
+      "num": 1,
+      "type": "mcq",
+      "section": "Mental Ability",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-1.jpg"
+    },
+    {
+      "id": "q2",
+      "num": 2,
+      "type": "mcq",
+      "section": "Mental Ability",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-2.jpg"
+    },
+    {
+      "id": "q3",
+      "num": 3,
+      "type": "mcq",
+      "section": "Mental Ability",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-3.jpg"
+    },
+    {
+      "id": "q4",
+      "num": 4,
+      "type": "mcq",
+      "section": "Mental Ability",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-4.jpg"
+    },
+    {
+      "id": "q5",
+      "num": 5,
+      "type": "mcq",
+      "section": "Mental Ability",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-5.jpg"
+    },
+    {
+      "id": "q6",
+      "num": 6,
+      "type": "mcq",
+      "section": "Mental Ability",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-6.jpg"
+    },
+    {
+      "id": "q7",
+      "num": 7,
+      "type": "mcq",
+      "section": "Mental Ability",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-7.jpg"
+    },
+    {
+      "id": "q8",
+      "num": 8,
+      "type": "mcq",
+      "section": "Mental Ability",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-8.jpg"
+    },
+    {
+      "id": "q9",
+      "num": 9,
+      "type": "mcq",
+      "section": "Mental Ability",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-9.jpg"
+    },
+    {
+      "id": "q10",
+      "num": 10,
+      "type": "mcq",
+      "section": "Mental Ability",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-10.jpg"
+    },
+    {
+      "id": "q11",
+      "num": 11,
+      "type": "mcq",
+      "section": "Mental Ability",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-11.jpg"
+    },
+    {
+      "id": "q12",
+      "num": 12,
+      "type": "mcq",
+      "section": "Mental Ability",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-12.jpg"
+    },
+    {
+      "id": "q13",
+      "num": 13,
+      "type": "mcq",
+      "section": "Mental Ability",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-13.jpg"
+    },
+    {
+      "id": "q14",
+      "num": 14,
+      "type": "mcq",
+      "section": "Mental Ability",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-14.jpg"
+    },
+    {
+      "id": "q15",
+      "num": 15,
+      "type": "mcq",
+      "section": "Mental Ability",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-15.jpg"
+    },
+    {
+      "id": "q16",
+      "num": 16,
+      "type": "mcq",
+      "section": "Mental Ability",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-16.jpg"
+    },
+    {
+      "id": "q17",
+      "num": 17,
+      "type": "mcq",
+      "section": "Mental Ability",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-17.jpg"
+    },
+    {
+      "id": "q18",
+      "num": 18,
+      "type": "mcq",
+      "section": "Mental Ability",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-18.jpg"
+    },
+    {
+      "id": "q19",
+      "num": 19,
+      "type": "mcq",
+      "section": "Mental Ability",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-19.jpg"
+    },
+    {
+      "id": "q20",
+      "num": 20,
+      "type": "mcq",
+      "section": "Mental Ability",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-20.jpg"
+    },
+    {
+      "id": "q21",
+      "num": 21,
+      "type": "mcq",
+      "section": "Physics",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-21.jpg"
+    },
+    {
+      "id": "q22",
+      "num": 22,
+      "type": "mcq",
+      "section": "Physics",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-22.jpg"
+    },
+    {
+      "id": "q23",
+      "num": 23,
+      "type": "mcq",
+      "section": "Physics",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-23.jpg"
+    },
+    {
+      "id": "q24",
+      "num": 24,
+      "type": "mcq",
+      "section": "Physics",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-24.jpg"
+    },
+    {
+      "id": "q25",
+      "num": 25,
+      "type": "mcq",
+      "section": "Physics",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-25.jpg"
+    },
+    {
+      "id": "q26",
+      "num": 26,
+      "type": "mcq",
+      "section": "Physics",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-26.jpg"
+    },
+    {
+      "id": "q27",
+      "num": 27,
+      "type": "mcq",
+      "section": "Physics",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-27.jpg"
+    },
+    {
+      "id": "q28",
+      "num": 28,
+      "type": "mcq",
+      "section": "Physics",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-28.jpg"
+    },
+    {
+      "id": "q29",
+      "num": 29,
+      "type": "mcq",
+      "section": "Physics",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-29.jpg"
+    },
+    {
+      "id": "q30",
+      "num": 30,
+      "type": "mcq",
+      "section": "Physics",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-30.jpg"
+    },
+    {
+      "id": "q31",
+      "num": 31,
+      "type": "mcq",
+      "section": "Physics",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-31.jpg"
+    },
+    {
+      "id": "q32",
+      "num": 32,
+      "type": "mcq",
+      "section": "Physics",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-32.jpg"
+    },
+    {
+      "id": "q33",
+      "num": 33,
+      "type": "mcq",
+      "section": "Physics",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-33.jpg"
+    },
+    {
+      "id": "q34",
+      "num": 34,
+      "type": "mcq",
+      "section": "Physics",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-34.jpg"
+    },
+    {
+      "id": "q35",
+      "num": 35,
+      "type": "mcq",
+      "section": "Physics",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-35.jpg"
+    },
+    {
+      "id": "q36",
+      "num": 36,
+      "type": "mcq",
+      "section": "Chemistry",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-36.jpg"
+    },
+    {
+      "id": "q37",
+      "num": 37,
+      "type": "mcq",
+      "section": "Chemistry",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-37.jpg"
+    },
+    {
+      "id": "q38",
+      "num": 38,
+      "type": "mcq",
+      "section": "Chemistry",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-38.jpg"
+    },
+    {
+      "id": "q39",
+      "num": 39,
+      "type": "mcq",
+      "section": "Chemistry",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-39.jpg"
+    },
+    {
+      "id": "q40",
+      "num": 40,
+      "type": "mcq",
+      "section": "Chemistry",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-40.jpg"
+    },
+    {
+      "id": "q41",
+      "num": 41,
+      "type": "mcq",
+      "section": "Chemistry",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-41.jpg"
+    },
+    {
+      "id": "q42",
+      "num": 42,
+      "type": "mcq",
+      "section": "Chemistry",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-42.jpg"
+    },
+    {
+      "id": "q43",
+      "num": 43,
+      "type": "mcq",
+      "section": "Chemistry",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-43.jpg"
+    },
+    {
+      "id": "q44",
+      "num": 44,
+      "type": "mcq",
+      "section": "Chemistry",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-44.jpg"
+    },
+    {
+      "id": "q45",
+      "num": 45,
+      "type": "mcq",
+      "section": "Chemistry",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-45.jpg"
+    },
+    {
+      "id": "q46",
+      "num": 46,
+      "type": "mcq",
+      "section": "Chemistry",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-46.jpg"
+    },
+    {
+      "id": "q47",
+      "num": 47,
+      "type": "mcq",
+      "section": "Chemistry",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-47.jpg"
+    },
+    {
+      "id": "q48",
+      "num": 48,
+      "type": "mcq",
+      "section": "Chemistry",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-48.jpg"
+    },
+    {
+      "id": "q49",
+      "num": 49,
+      "type": "mcq",
+      "section": "Chemistry",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-49.jpg"
+    },
+    {
+      "id": "q50",
+      "num": 50,
+      "type": "mcq",
+      "section": "Chemistry",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-50.jpg"
+    },
+    {
+      "id": "q51",
+      "num": 51,
+      "type": "mcq",
+      "section": "Biology",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-51.jpg"
+    },
+    {
+      "id": "q52",
+      "num": 52,
+      "type": "mcq",
+      "section": "Biology",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-52.jpg"
+    },
+    {
+      "id": "q53",
+      "num": 53,
+      "type": "mcq",
+      "section": "Biology",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-53.jpg"
+    },
+    {
+      "id": "q54",
+      "num": 54,
+      "type": "mcq",
+      "section": "Biology",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-54.jpg"
+    },
+    {
+      "id": "q55",
+      "num": 55,
+      "type": "mcq",
+      "section": "Biology",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-55.jpg"
+    },
+    {
+      "id": "q56",
+      "num": 56,
+      "type": "mcq",
+      "section": "Biology",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-56.jpg"
+    },
+    {
+      "id": "q57",
+      "num": 57,
+      "type": "mcq",
+      "section": "Biology",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-57.jpg"
+    },
+    {
+      "id": "q58",
+      "num": 58,
+      "type": "mcq",
+      "section": "Biology",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-58.jpg"
+    },
+    {
+      "id": "q59",
+      "num": 59,
+      "type": "mcq",
+      "section": "Biology",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-59.jpg"
+    },
+    {
+      "id": "q60",
+      "num": 60,
+      "type": "mcq",
+      "section": "Biology",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-60.jpg"
+    },
+    {
+      "id": "q61",
+      "num": 61,
+      "type": "mcq",
+      "section": "Biology",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-61.jpg"
+    },
+    {
+      "id": "q62",
+      "num": 62,
+      "type": "mcq",
+      "section": "Biology",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-62.jpg"
+    },
+    {
+      "id": "q63",
+      "num": 63,
+      "type": "mcq",
+      "section": "Biology",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-63.jpg"
+    },
+    {
+      "id": "q64",
+      "num": 64,
+      "type": "mcq",
+      "section": "Biology",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-64.jpg"
+    },
+    {
+      "id": "q65",
+      "num": 65,
+      "type": "mcq",
+      "section": "Biology",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-65.jpg"
+    },
+    {
+      "id": "q66",
+      "num": 66,
+      "type": "mcq",
+      "section": "Maths",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-66.jpg"
+    },
+    {
+      "id": "q67",
+      "num": 67,
+      "type": "mcq",
+      "section": "Maths",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-67.jpg"
+    },
+    {
+      "id": "q68",
+      "num": 68,
+      "type": "mcq",
+      "section": "Maths",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-68.jpg"
+    },
+    {
+      "id": "q69",
+      "num": 69,
+      "type": "mcq",
+      "section": "Maths",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-69.jpg"
+    },
+    {
+      "id": "q70",
+      "num": 70,
+      "type": "mcq",
+      "section": "Maths",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-70.jpg"
+    },
+    {
+      "id": "q71",
+      "num": 71,
+      "type": "mcq",
+      "section": "Maths",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-71.jpg"
+    },
+    {
+      "id": "q72",
+      "num": 72,
+      "type": "mcq",
+      "section": "Maths",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-72.jpg"
+    },
+    {
+      "id": "q73",
+      "num": 73,
+      "type": "mcq",
+      "section": "Maths",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-73.jpg"
+    },
+    {
+      "id": "q74",
+      "num": 74,
+      "type": "mcq",
+      "section": "Maths",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-74.jpg"
+    },
+    {
+      "id": "q75",
+      "num": 75,
+      "type": "mcq",
+      "section": "Maths",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-75.jpg"
+    },
+    {
+      "id": "q76",
+      "num": 76,
+      "type": "mcq",
+      "section": "Maths",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-76.jpg"
+    },
+    {
+      "id": "q77",
+      "num": 77,
+      "type": "mcq",
+      "section": "Maths",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-77.jpg"
+    },
+    {
+      "id": "q78",
+      "num": 78,
+      "type": "mcq",
+      "section": "Maths",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-78.jpg"
+    },
+    {
+      "id": "q79",
+      "num": 79,
+      "type": "mcq",
+      "section": "Maths",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-79.jpg"
+    },
+    {
+      "id": "q80",
+      "num": 80,
+      "type": "mcq",
+      "section": "Maths",
+      "question": "",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "min": 0,
+      "max": 999,
+      "image": "papers/abquest-class-x-22-03-26/q-80.jpg"
+    }
+  ]
+}

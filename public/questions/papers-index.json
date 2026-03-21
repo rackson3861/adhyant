@@ -1,0 +1,45 @@
+{
+  "papers": [
+    {
+      "id": "abquest-class-ix-22-03-26",
+      "sourcePdf": "ABQuest_Class_IX_22_03_26.pdf",
+      "displayName": "ABQuest Class IX 22 03 26",
+      "questionCount": 80,
+      "imagesWritten": 80,
+      "durationMinutes": 120
+    },
+    {
+      "id": "abquest-class-xiii-22-03-26",
+      "sourcePdf": "ABQuest_Class_XIII_22_03_26.pdf",
+      "displayName": "ABQuest Class XIII 22 03 26",
+      "questionCount": 100,
+      "imagesWritten": 99,
+      "durationMinutes": 120
+    },
+    {
+      "id": "abquest-class-xii-22-03-26",
+      "sourcePdf": "ABQuest_Class_XII_22_03_26.pdf",
+      "displayName": "ABQuest Class XII 22 03 26",
+      "questionCount": 100,
+      "imagesWritten": 100,
+      "durationMinutes": 120
+    },
+    {
+      "id": "abquest-class-xi-22-03-26",
+      "sourcePdf": "ABQuest_Class_XI_22_03_26.pdf",
+      "displayName": "ABQuest Class XI 22 03 26",
+      "questionCount": 100,
+      "imagesWritten": 100,
+      "durationMinutes": 120
+    },
+    {
+      "id": "abquest-class-x-22-03-26",
+      "sourcePdf": "ABQuest_Class_X_22_03_26.pdf",
+      "displayName": "ABQuest Class X 22 03 26",
+      "questionCount": 80,
+      "imagesWritten": 80,
+      "durationMinutes": 120
+    }
+  ],
+  "activePaperId": "abquest-class-ix-22-03-26"
+}

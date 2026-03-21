@@ -10,9 +10,20 @@
 }
 
 .online-test-reg-hero {
-  background: linear-gradient(135deg, #023997 0%, #0558d4 50%, #0a6efd 100%);
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #022c6f 0%, #0558d4 42%, #0c4a6e 100%);
   padding: 2.5rem 1rem;
   text-align: center;
+}
+
+.online-test-reg-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 90% 80% at 50% -30%, rgba(255, 255, 255, 0.22), transparent 50%),
+    radial-gradient(ellipse 60% 50% at 100% 50%, rgba(56, 189, 248, 0.12), transparent 45%);
+  pointer-events: none;
 }
 
 .online-test-reg-hero-sm {
@@ -20,18 +31,25 @@
 }
 
 .online-test-reg-hero-inner {
+  position: relative;
+  z-index: 1;
   max-width: 560px;
   margin: 0 auto;
 }
 
 .online-test-reg-badge {
   display: inline-block;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.9);
-  margin-bottom: 0.5rem;
+  color: rgba(255, 255, 255, 0.95);
+  margin-bottom: 0.65rem;
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
 }
 
 .online-test-reg-title {
@@ -40,6 +58,65 @@
   color: #fff;
   margin: 0 0 0.5rem 0;
   line-height: 1.3;
+}
+
+/* Animated exam name (class / paper title only — no extra subtitle line) */
+@keyframes online-test-exam-shimmer {
+  0% {
+    background-position: -30% 50%;
+  }
+  100% {
+    background-position: 130% 50%;
+  }
+}
+
+.online-test-exam-name {
+  display: block;
+  margin: 0;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  background: linear-gradient(
+    100deg,
+    #ffffff 0%,
+    #fef08a 22%,
+    #ffffff 40%,
+    #a5f3fc 55%,
+    #ffffff 72%,
+    #fde68a 88%,
+    #ffffff 100%
+  );
+  background-size: 250% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: online-test-exam-shimmer 4.5s ease-in-out infinite alternate;
+  filter: drop-shadow(0 2px 14px rgba(255, 255, 255, 0.4));
+}
+
+.online-test-reg-title.online-test-exam-name {
+  font-size: clamp(1.85rem, 5vw, 2.5rem);
+}
+
+.online-test-exam-name--compact {
+  font-size: clamp(1rem, 2.8vw, 1.35rem);
+  font-weight: 800;
+  animation-duration: 3.5s;
+}
+
+.online-test-instr-hero-meta {
+  opacity: 0.92;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .online-test-exam-name {
+    animation: none;
+    background: none;
+    -webkit-text-fill-color: #fff;
+    color: #fff;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+  }
 }
 
 .online-test-reg-subtitle {
@@ -95,6 +172,74 @@
   border: 1px solid #fecaca;
 }
 
+.online-test-resume-banner {
+  padding: 1rem 1.1rem;
+  margin-bottom: 1.25rem;
+  background: linear-gradient(135deg, #eff6ff 0%, #e0f2fe 100%);
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  color: #0f172a;
+}
+
+.online-test-resume-banner-text {
+  margin: 0 0 0.85rem 0;
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.online-test-resume-banner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.online-test-resume-continue {
+  margin: 0;
+}
+
+.online-test-resume-discard {
+  padding: 0.55rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #64748b;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.online-test-resume-discard:hover {
+  color: #0f172a;
+}
+
+.online-test-resume-instr-hint {
+  padding: 0.85rem 1rem;
+  margin-bottom: 1.25rem;
+  background: #eff6ff;
+  border: 1px solid #93c5fd;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  color: #1e3a8a;
+  line-height: 1.45;
+}
+
+.online-test-instr-proctor-warning {
+  margin: 0 0 1.25rem 0;
+  padding: 0.9rem 1rem;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: #991b1b;
+  background: #fef2f2;
+  border: 1px solid #f87171;
+  border-radius: 10px;
+}
+
+.online-test-instr-proctor-warning strong {
+  color: #7f1d1d;
+}
+
 .online-test-reg-form {
   display: flex;
   flex-direction: column;
@@ -126,6 +271,12 @@
   outline: none;
   border-color: #023997;
   box-shadow: 0 0 0 3px rgba(2, 57, 151, 0.15);
+}
+
+select.online-test-reg-input {
+  cursor: pointer;
+  background-color: #fff;
+  appearance: auto;
 }
 
 .online-test-reg-input::placeholder {
@@ -175,6 +326,20 @@
   padding: 2rem;
 }
 
+.online-test-instr-logo-wrap {
+  text-align: center;
+  margin: 0 0 1.25rem 0;
+}
+
+.online-test-instr-logo {
+  max-width: min(280px, 88vw);
+  width: 100%;
+  height: auto;
+  vertical-align: middle;
+  user-select: none;
+  pointer-events: none;
+}
+
 .online-test-instr-title {
   font-size: 1.35rem;
   font-weight: 700;
@@ -191,6 +356,92 @@
 
 .online-test-instr-list li {
   margin-bottom: 0.5rem;
+}
+
+.online-test-instr-sections .online-test-instr-section-list {
+  list-style: disc;
+  padding-left: 1.35rem;
+  margin: 0.5rem 0 0 0;
+  line-height: 1.65;
+}
+
+.online-test-instr-section-list li {
+  margin-bottom: 0.35rem;
+}
+
+.online-test-instr-section-name {
+  color: #023997;
+  font-weight: 600;
+}
+
+.online-test-instr-paper-lines li {
+  font-size: 0.92rem;
+  color: #475569;
+}
+
+/* Class XI / XII / XIII — Engineering vs Medical stream (Physics / Chemistry / Maths vs Biology) */
+.online-test-instr-stream-li {
+  list-style: none;
+  margin-left: -1.35rem;
+  margin-bottom: 1rem;
+}
+
+.online-test-instr-stream-callout {
+  border: 2px solid #023997;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #f0f7ff 0%, #e8f2fc 100%);
+  padding: 1rem 1.15rem;
+  box-shadow: 0 2px 12px rgba(2, 57, 151, 0.12);
+}
+
+.online-test-instr-stream-title {
+  margin: 0 0 0.75rem 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: 0.02em;
+}
+
+.online-test-instr-stream-line {
+  margin: 0 0 0.55rem 0;
+  font-size: 1rem;
+  line-height: 1.55;
+  color: #1e293b;
+}
+
+.online-test-instr-stream-line:last-child {
+  margin-bottom: 0;
+}
+
+.online-test-instr-stream-label {
+  color: #023997;
+  font-weight: 800;
+}
+
+.online-test-instr-stream-text {
+  font-weight: 600;
+}
+
+.online-test-palette-grouped {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.online-test-palette-group-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #023997;
+  line-height: 1.2;
+  padding: 0 2px;
+}
+
+.online-test-palette-group-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
 }
 
 .online-test-instr-btn {
@@ -375,10 +626,21 @@
 .online-test-palette-legend {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.65rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #e2e8f0;
   font-size: 0.7rem;
   color: #64748b;
+}
+
+.online-test-palette-legend-prefix {
+  flex: 0 0 auto;
+  font-weight: 700;
+  color: #475569;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .online-test-legend-item.seen {
@@ -409,10 +671,20 @@
   -webkit-overflow-scrolling: touch;
 }
 
-.online-test-palette-scroll .online-test-palette {
+/* Ungrouped palette only — grouped papers must stay column layout or section blocks merge on one row */
+.online-test-palette-scroll .online-test-palette:not(.online-test-palette-grouped) {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  padding: 2px 0;
+}
+
+.online-test-palette-scroll .online-test-palette.online-test-palette-grouped {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 0.75rem;
+  align-items: stretch;
   padding: 2px 0;
 }
 
@@ -449,8 +721,9 @@
 /* Question head */
 .online-test-question-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 0.75rem;
+  gap: 0.35rem 0.75rem;
   margin-bottom: 0.5rem;
 }
 
@@ -459,6 +732,329 @@
   font-weight: 700;
   color: #0f172a;
   margin: 0;
+}
+
+.online-test-question-section {
+  flex-basis: 100%;
+  margin: 0.15rem 0 0 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #023997;
+  letter-spacing: 0.02em;
+  line-height: 1.35;
+}
+
+/* Full-screen overlay while all question figures preload (permission phase) */
+.online-test-preload-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(15, 23, 42, 0.78);
+  backdrop-filter: blur(4px);
+}
+
+.online-test-preload-card {
+  width: 100%;
+  max-width: 420px;
+  padding: 2rem 1.75rem;
+  text-align: center;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);
+}
+
+.online-test-preload-spinner {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 1.25rem;
+  border-radius: 50%;
+  border: 4px solid #e2e8f0;
+  border-top-color: #023997;
+  animation: online-test-preload-spin 0.8s linear infinite;
+}
+
+@keyframes online-test-preload-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.online-test-preload-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.online-test-preload-sub {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+  color: #334155;
+  line-height: 1.45;
+}
+
+.online-test-preload-hint {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.online-test-question-image-wrap {
+  position: relative;
+  width: 100%;
+  min-height: 120px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.online-test-question-image-wrap--loaded .online-test-question-image-skeleton {
+  display: none;
+}
+
+.online-test-question-image-skeleton {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 45%, #f1f5f9 90%);
+  background-size: 220% 100%;
+  animation: online-test-img-shimmer 1.15s ease-in-out infinite;
+}
+
+@keyframes online-test-img-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+.online-test-question-image {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  max-height: min(75vh, 640px);
+  height: auto;
+  object-fit: contain;
+  image-rendering: auto;
+  transition: opacity 0.2s ease;
+}
+
+.online-test-question-image-wrap:not(.online-test-question-image-wrap--loaded) .online-test-question-image {
+  opacity: 0;
+}
+
+.online-test-question-image-wrap--loaded .online-test-question-image {
+  opacity: 1;
+}
+
+/* Stem + figure = one question block; options start below */
+.online-test-question-stem-block {
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.online-test-question-stem-block .online-test-question-text {
+  margin-bottom: 0.75rem;
+}
+
+.online-test-options-prompt {
+  margin-top: 0.25rem;
+}
+
+/* MCQ: 2×2 grid for image-based papers (options 1–4 only) */
+.online-test-options--grid-2x2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem 1rem;
+  margin-top: 0.25rem;
+  border: none;
+  background: transparent;
+}
+
+/* MCQ: formal text-style choices — no filled button chrome; bold 1–4 only for image papers */
+.online-test-opt-btn {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  text-align: left;
+  margin: 0;
+  padding: 0.5rem 0.35rem;
+  font: inherit;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  color: #0f172a;
+  transition: color 0.15s ease, border-color 0.15s ease;
+  -webkit-appearance: none;
+  appearance: none;
+  box-shadow: none;
+}
+
+.online-test-opt-btn:hover {
+  background: transparent;
+  color: #0f172a;
+  border-bottom-color: #cbd5e1;
+}
+
+.online-test-opt-btn:focus-visible {
+  outline: 2px solid #023997;
+  outline-offset: 2px;
+}
+
+.online-test-opt-num {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.75rem;
+  height: auto;
+  padding: 0;
+  border-radius: 0;
+  font-weight: 800;
+  font-size: 1.125rem;
+  line-height: 1.35;
+  background: transparent;
+  color: #0f172a;
+  border: none;
+}
+
+.online-test-opt-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+/* Formal layout: bold numeral only, no “Option N” caption */
+.online-test-opt-num-label {
+  display: none;
+}
+
+.online-test-opt-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.online-test-options .online-test-opt-btn.active {
+  background: transparent !important;
+  color: #0f172a;
+  border-bottom-color: transparent;
+  font-weight: inherit;
+}
+
+.online-test-options .online-test-opt-btn.active .online-test-opt-num {
+  background: transparent;
+  color: #0f172a;
+  border: none;
+  font-weight: 900;
+}
+
+/* Image-based papers: 1–4 in 2×2 — full cell bar, light blue hover, dark blue when selected */
+.online-test-options--grid-2x2 .online-test-opt-btn--digit-only {
+  width: 100%;
+  max-width: 100%;
+  align-self: stretch;
+  justify-self: stretch;
+  min-height: 52px;
+  padding: 0.65rem 1rem;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: none;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.online-test-options--grid-2x2 .online-test-opt-btn--digit-only:hover {
+  background: #dbeafe !important;
+  border-color: #93c5fd !important;
+  border-bottom: 1px solid #93c5fd !important;
+  box-shadow: none;
+}
+
+.online-test-options--grid-2x2 .online-test-opt-btn--digit-only:focus-visible {
+  outline: 2px solid #023997;
+  outline-offset: 2px;
+}
+
+.online-test-options--grid-2x2 .online-test-opt-btn--digit-only.active {
+  background: #023997 !important;
+  border-color: #023997 !important;
+  border-bottom: 1px solid #023997 !important;
+  box-shadow: 0 2px 8px rgba(2, 57, 151, 0.25);
+  color: #ffffff;
+}
+
+.online-test-options--grid-2x2 .online-test-opt-btn--digit-only.active:hover {
+  background: #012a6b !important;
+  border-color: #012a6b !important;
+  border-bottom-color: #012a6b !important;
+}
+
+.online-test-options--grid-2x2 .online-test-opt-num--solo {
+  min-width: unset;
+  height: auto;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: #0f172a;
+}
+
+.online-test-options--grid-2x2 .online-test-opt-btn--digit-only.active .online-test-opt-num--solo {
+  font-weight: 900;
+  font-size: 1.45rem;
+  color: #ffffff !important;
+}
+
+.online-test-opt-btn--digit-only {
+  min-height: auto;
+  padding: 0.4rem 0.25rem;
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  margin-bottom: 0;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.online-test-opt-num--solo {
+  min-width: unset;
+  height: auto;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 
 /* Footer bar (like reference) */
@@ -561,10 +1157,12 @@
   align-items: center;
   gap: 1rem;
   margin-bottom: 1rem;
-  padding: 1rem 1.25rem;
-  background: linear-gradient(135deg, #023997 0%, #0558d4 100%);
-  border-radius: 12px;
+  padding: 1rem 1.35rem;
+  background: linear-gradient(135deg, #022c6f 0%, #0558d4 48%, #0e7490 100%);
+  border-radius: 16px;
   color: #fff;
+  box-shadow: 0 10px 40px rgba(2, 57, 151, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .online-test-header-title {
@@ -572,6 +1170,26 @@
   font-weight: 700;
   color: #fff;
   margin: 0;
+}
+
+.online-test-header-title.online-test-exam-name {
+  flex: 1 1 200px;
+  min-width: 0;
+  text-align: left;
+  line-height: 1.25;
+}
+
+/* Camera step — exam title strip */
+.online-test-perm-exam-strip {
+  background: linear-gradient(135deg, #022c6f 0%, #0558d4 50%, #0c4a6e 100%);
+  padding: 0.75rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 24px rgba(2, 44, 111, 0.2);
+}
+
+.online-test-perm-exam-title {
+  margin: 0;
+  text-align: center;
 }
 
 .online-test-header-meta {
@@ -615,11 +1233,20 @@
 }
 
 .online-test-question-card {
+  position: relative;
   background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 2px 16px rgba(2, 57, 151, 0.06), 0 0 0 1px rgba(2, 57, 151, 0.05);
+  border-radius: 18px;
+  box-shadow: 0 4px 24px rgba(2, 57, 151, 0.08), 0 0 0 1px rgba(2, 57, 151, 0.06);
   margin-bottom: 1.5rem;
   overflow: hidden;
+}
+
+.online-test-question-card::before {
+  content: "";
+  display: block;
+  height: 4px;
+  background: linear-gradient(90deg, #0558d4, #22d3ee, #0e7490);
+  border-radius: 18px 18px 0 0;
 }
 
 .online-test-question-body {
@@ -752,10 +1379,7 @@
   padding-left: 1.25rem;
 }
 
-.online-test-options .btn.active {
-  background-color: var(--bs-primary);
-  color: #fff;
-}
+/* MCQ options use .online-test-opt-btn only (no Bootstrap .btn) */
 
 .online-test-palette {
   display: flex;
@@ -907,15 +1531,101 @@
     order: 2;
     flex: 1 1 auto;
     min-width: 100%;
-    min-height: 380px;
+    min-height: 320px;
   }
   .online-test-sidebar-inner {
-    max-height: 420px;
+    max-height: min(480px, 55vh);
+    min-height: 0;
   }
   .online-test-palette .palette-btn {
     width: 36px;
     height: 36px;
     font-size: 0.9rem;
+  }
+
+  /* Test header: stack on narrow screens, respect notches */
+  .online-test-header {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+    padding: 0.85rem 1rem;
+    padding-left: max(1rem, env(safe-area-inset-left, 0px));
+    padding-right: max(1rem, env(safe-area-inset-right, 0px));
+  }
+
+  .online-test-header-title.online-test-exam-name {
+    text-align: center;
+    flex: none;
+    width: 100%;
+  }
+
+  .online-test-header-meta {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .online-test-meta-text {
+    width: 100%;
+    text-align: center;
+    line-height: 1.35;
+  }
+
+  .online-test-phase-test .container {
+    padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+    padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+  }
+
+  .online-test-registration .container,
+  .online-test-instructions-wrap .container,
+  .online-test-permission-wrap .container {
+    padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+    padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+  }
+
+  .online-test-question-body {
+    padding: 1rem 1.15rem;
+  }
+
+  .online-test-question-text {
+    font-size: 1.05rem;
+    margin-bottom: 1rem;
+  }
+
+  .online-test-question-head {
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .online-test-question-image {
+    max-height: min(52vh, 400px);
+  }
+
+  .online-test-reg-card-body {
+    padding: 1.35rem 1.15rem;
+  }
+
+  .online-test-instructions-body {
+    padding: 1.35rem 1.15rem;
+  }
+
+  .online-test-permission-card-steps,
+  .online-test-permission-card-preview {
+    padding: 1.25rem 1rem;
+  }
+
+  .online-test-permission-preview-box {
+    min-height: 200px;
+  }
+
+  .online-test-permission-video {
+    min-height: 200px;
+    max-height: 260px;
+  }
+
+  .online-test-permission-grid {
+    gap: 1rem;
   }
 }
 
@@ -929,8 +1639,16 @@
   margin: 0 auto;
   background: #fff;
   border-radius: 20px;
-  box-shadow: 0 4px 24px rgba(2, 57, 151, 0.08), 0 0 0 1px rgba(2, 57, 151, 0.06);
+  box-shadow: 0 12px 40px rgba(2, 57, 151, 0.1), 0 0 0 1px rgba(2, 57, 151, 0.06);
   overflow: hidden;
+  position: relative;
+}
+
+.online-test-result-card::before {
+  content: "";
+  display: block;
+  height: 4px;
+  background: linear-gradient(90deg, #0558d4, #22d3ee, #0e7490);
 }
 
 .online-test-result-body {
@@ -1137,4 +1855,82 @@
   font-size: 1.05rem;
   line-height: 1.5;
   color: #334155;
+}
+
+/* ========== Small phones: full-width controls & touch targets ========== */
+@media (max-width: 576px) {
+  .online-test-footer-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.6rem;
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+  }
+
+  .online-test-footer-btn {
+    width: 100%;
+    min-height: 46px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-size: 0.95rem;
+  }
+
+  .online-test-reg-hero {
+    padding: 1.35rem 0.65rem;
+  }
+
+  .online-test-instructions-body {
+    padding: 1.1rem 0.9rem;
+  }
+
+  .online-test-instr-list {
+    padding-left: 1.1rem;
+    font-size: 0.95rem;
+  }
+
+  .online-test-timer-warning-card {
+    margin: 0 0.25rem;
+    padding: 1.35rem 1rem;
+  }
+
+  .online-test-result-body {
+    padding: 1.35rem 1rem;
+  }
+
+  .online-test-result-card {
+    margin-left: 0.25rem;
+    margin-right: 0.25rem;
+  }
+
+  .online-test-palette .palette-btn {
+    width: 34px;
+    height: 34px;
+    font-size: 0.82rem;
+  }
+
+  .online-test-video-box {
+    max-height: 200px;
+  }
+}
+
+/* Test code entry (/test/online gate) — safe area on phones */
+.test-code-gate-page {
+  padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+  padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+  padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+}
+
+.test-code-gate-page .btn,
+.test-code-gate-page button[type="submit"] {
+  touch-action: manipulation;
+  min-height: 46px;
+}
+
+/* Faster taps on touch devices; no double-tap zoom delay on buttons */
+.online-test-wrapper button,
+.online-test-wrapper .btn,
+.online-test-wrapper .online-test-reg-btn,
+.online-test-wrapper .online-test-footer-btn {
+  touch-action: manipulation;
 }

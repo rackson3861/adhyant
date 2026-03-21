@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 
 export default function Footer() {
   return (
@@ -11,14 +12,16 @@ export default function Footer() {
           <div className="row g-5">
           <div className="col-lg-4 col-md-6">
               <h4 className="text-white mb-3">About Us</h4>
-              <p>
-              Adhyant is a coaching institute helping students excel in <b>IIT-JEE, NEET, and foundational learning</b>.
-              <ul className="about-points">
-                <li>Concept-Focused Teaching</li>
-                <li>Expert Mentorship</li>
-                <li>Career Guidance</li>
-              </ul>
-              </p>
+              <div className="mb-0">
+                <p className="mb-2">
+                  Adhyant is a coaching institute helping students excel in <b>IIT-JEE, NEET, and foundational learning</b>.
+                </p>
+                <ul className="about-points mb-0">
+                  <li>Concept-Focused Teaching</li>
+                  <li>Expert Mentorship</li>
+                  <li>Career Guidance</li>
+                </ul>
+              </div>
 
               {/* <div
                 className="position-relative mx-auto"
@@ -39,20 +42,20 @@ export default function Footer() {
             </div>
             <div className="col-lg-4 col-md-6">
               <h4 className="text-white mb-3">Quick Link</h4>
-              <a className="btn btn-link" href>
+              <Link className="btn btn-link" to="/about">
                 About Us
-              </a>
-              <a className="btn btn-link" href>
+              </Link>
+              <Link className="btn btn-link" to="/contact">
                 Contact Us
-              </a>
-              <a className="btn btn-link" href>
+              </Link>
+              <a className="btn btn-link" href="#">
                 Privacy Policy
               </a>
-              <a className="btn btn-link" href>
-                Terms &amp; Condition
+              <a className="btn btn-link" href="#">
+                Terms & Condition
               </a>
-              <a className="btn btn-link" href>
-                FAQs &amp; Help
+              <a className="btn btn-link" href="#">
+                FAQs & Help
               </a>
             </div>
             <div className="col-lg-4 col-md-6">
@@ -116,9 +119,9 @@ export default function Footer() {
             <div className="row">
               <div className="col-md-6 text-center text-md-start mb-3 mb-md-0">
                 ©{" "}
-                <a className="border-bottom" href>
+                <Link className="border-bottom text-reset" to="/">
                   ADHYANT
-                </a>
+                </Link>
                 , All Right Reserved. Designed By{" "}
                 <a
                   className="border-bottom"
