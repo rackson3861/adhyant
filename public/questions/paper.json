@@ -1,0 +1,10 @@
+{
+  "_info": "Prefer papers-index.json + papers/<id>/paper.json. Run: npm run extract:papers (PDFs in /questions/*.pdf).",
+  "paperId": "legacy-placeholder",
+  "title": "Online Assessment",
+  "durationMinutes": 120,
+  "instructions": [
+    "Total time allowed for this online test is 120 minutes. The test will auto-submit when the timer ends."
+  ],
+  "questions": []
+}

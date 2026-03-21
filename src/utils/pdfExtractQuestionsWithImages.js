@@ -4,11 +4,21 @@
  */
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorkerSrc from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import { isPlausibleQuestionNumberAt } from "./pdfQuestionParser.js";
+import { isPlausibleQuestionNumberAt, isInstructionOrSummaryQuestionFalsePositive } from "./pdfQuestionParser.js";
 import { extractPaperMetaFromPdfText } from "./pdfPaperMeta.js";
+import { getQuestionPdfPageRange } from "./pdfQuestionPageRange.js";
+import {
+  capQuestionCropBottomForSectionHeaders,
+  findMaxSectionLikeBottomBetween,
+  isAnswerSheetBoilerplateTextSegment,
+  SECTION_CROP_PAD_AFTER_BLOCK,
+} from "./pdfQuestionImageCrop.js";
 
 const RENDER_SCALE = 2;
 const CROP_PAD = 6;
+/** Pixels below the last option marker (e.g. (4)) — tight crop, no full page tail. */
+const OPTION_PAD_BELOW = 14;
+const LAST_QUESTION_MAX_FALLBACK_H = 720;
 const JPEG_QUALITY = 0.7;
 const Q_RE = /\b([1-9]\d{0,2})\.(\s+)/g;
 
@@ -136,17 +146,65 @@ function regionHasLikelyFigure(canvas, sx, sy, sw, sh) {
   return cr > 0.016 || (cr > 0.006 && mr > 0.085);
 }
 
-const FIGURE_KEYWORD_RE =
-  /figure|diagram|graph|chart|plot|shown\s+below|following\s+(figure|diagram|graph)|image\s+below|as\s+shown|shown\s+in|given\s+figure|the\s+curve|the\s+circuit|below\s+shows|opposite\s+figure|adjacent\s+figure/i;
+function normalizePdfMark(str) {
+  return (str || "")
+    .trim()
+    .replace(/\s+/g, "")
+    .replace(/\uFF08/g, "(")
+    .replace(/\uFF09/g, ")");
+}
 
 /**
- * @returns {Map<number, string>} paper question number -> JPEG data URL (full crop; caller filters by figure hint)
+ * Bottom of last "(4)" / "4." option label in viewport, within [yMin, yMax].
+ */
+function findMcqOptionsBottom(segments, yMin, yMax) {
+  let best = null;
+  for (const seg of segments) {
+    if (seg.top < yMin - 2 || seg.bottom > yMax + 10) continue;
+    if (isAnswerSheetBoilerplateTextSegment(seg.str)) continue;
+    const compact = normalizePdfMark(seg.str);
+    if (!compact || compact.length > 96) continue;
+    if (/^\(4\)/.test(compact) || /^4[.)]/.test(compact)) {
+      if (best == null || seg.bottom > best) best = seg.bottom;
+    }
+  }
+  return best;
+}
+
+/**
+ * When "(4)" is missing from the text layer, use max bottom among (1)–(4) line starts (needs ≥2 markers).
+ */
+function findMcqOptionClusterMaxBottom(segments, yMin, yMax) {
+  const bottoms = { 1: null, 2: null, 3: null, 4: null };
+  for (const seg of segments) {
+    if (seg.top < yMin - 2 || seg.bottom > yMax + 10) continue;
+    if (isAnswerSheetBoilerplateTextSegment(seg.str)) continue;
+    const compact = normalizePdfMark(seg.str);
+    if (!compact || compact.length > 120) continue;
+    for (let n = 1; n <= 4; n++) {
+      const re = new RegExp(`^\\(${n}\\)|^${n}[.)]`);
+      if (re.test(compact)) {
+        const prev = bottoms[n];
+        if (prev == null || seg.bottom > prev) bottoms[n] = seg.bottom;
+        break;
+      }
+    }
+  }
+  const found = [1, 2, 3, 4].filter((n) => bottoms[n] != null);
+  if (found.length < 2) return null;
+  if (bottoms[4] != null) return bottoms[4];
+  return Math.max(...found.map((n) => bottoms[n]));
+}
+
+/**
+ * @returns {Map<number, { dataUrl: string, hasFigure: boolean }>} paper question number → full question+options crop
  */
 export async function extractQuestionImagesByNumber(pdfDocument) {
   const map = new Map();
   const numPages = pdfDocument.numPages;
+  const { startPage, endPage } = getQuestionPdfPageRange(numPages);
 
-  for (let pageIndex = 1; pageIndex <= numPages; pageIndex++) {
+  for (let pageIndex = startPage; pageIndex <= endPage; pageIndex++) {
     const page = await pdfDocument.getPage(pageIndex);
     const { canvas, viewport } = await renderPageToCanvas(page);
     const segments = await getPageTextSegments(page, viewport);
@@ -164,6 +222,7 @@ export async function extractQuestionImagesByNumber(pdfDocument) {
       const num = parseInt(m[1], 10);
       if (num > 250) continue;
       if (!isPlausibleQuestionNumberAt(pageText, m.index)) continue;
+      if (isInstructionOrSummaryQuestionFalsePositive(pageText, m.index, m[0].length)) continue;
       const tail = pageText.slice(m.index + m[0].length, m.index + m[0].length + 48).toLowerCase();
       if (
         /^(this booklet|fill your|the answer sheet|total questions|marking scheme|after breaking|there are\s+\d+\s+pages)/i.test(
@@ -191,16 +250,49 @@ export async function extractQuestionImagesByNumber(pdfDocument) {
     }
     const w = canvas.width;
 
+    const cropBottomByK = [];
+
     for (let k = 0; k < startsDedup.length; k++) {
-      const y1 = Math.max(0, Math.floor(startsDedup[k].yTop - CROP_PAD));
-      const y2 =
-        k + 1 < startsDedup.length
-          ? Math.floor(startsDedup[k + 1].yTop - 2)
-          : canvas.height;
+      let y1 = Math.max(0, Math.floor(startsDedup[k].yTop - CROP_PAD));
+      if (k > 0 && cropBottomByK[k - 1] != null) {
+        const junkBottom = findMaxSectionLikeBottomBetween(
+          segments,
+          cropBottomByK[k - 1],
+          startsDedup[k].yTop
+        );
+        if (junkBottom != null && junkBottom < startsDedup[k].yTop - 2) {
+          y1 = Math.max(y1, Math.ceil(junkBottom + SECTION_CROP_PAD_AFTER_BLOCK));
+        }
+      }
+
+      const nextTop = k + 1 < startsDedup.length ? startsDedup[k + 1].yTop : canvas.height;
+      const ySearchMax = nextTop;
+
+      let optBottom = findMcqOptionsBottom(segments, y1, ySearchMax);
+      if (optBottom == null) {
+        optBottom = findMcqOptionClusterMaxBottom(segments, y1, ySearchMax);
+      }
+
+      let y2;
+      if (optBottom != null) {
+        y2 = Math.ceil(optBottom + OPTION_PAD_BELOW);
+      } else if (k + 1 < startsDedup.length) {
+        y2 = Math.floor(nextTop - 2);
+      } else {
+        const cap = Math.min(Math.floor(canvas.height * 0.4), LAST_QUESTION_MAX_FALLBACK_H);
+        y2 = Math.min(y1 + cap, canvas.height);
+      }
+      if (k + 1 < startsDedup.length) {
+        y2 = Math.min(y2, Math.floor(nextTop - 1));
+      }
+      y2 = capQuestionCropBottomForSectionHeaders(segments, y1, nextTop, optBottom, y2);
+      if (y2 <= y1) y2 = Math.min(y1 + 80, canvas.height);
+      cropBottomByK[k] = y2;
       const h = Math.max(40, y2 - y1);
       const hasFigure = regionHasLikelyFigure(canvas, 0, y1, w, h);
       const dataUrl = cropCanvasToJpegUrl(canvas, 0, y1, w, h);
-      if (dataUrl) map.set(startsDedup[k].num, { dataUrl, hasFigure });
+      // First page wins: same paperQuestionNum on a later page must not overwrite (avoids wrong crop).
+      if (dataUrl && !map.has(startsDedup[k].num)) map.set(startsDedup[k].num, { dataUrl, hasFigure });
     }
   }
 
@@ -215,13 +307,21 @@ export async function extractQuestionImagesByNumber(pdfDocument) {
 export async function parsePdfBytesToQuestionsWithImages(uint8Array) {
   setLocalPdfWorker();
   const pdf = await pdfjsLib.getDocument({ data: uint8Array, useSystemFonts: true }).promise;
+  let metaText = "";
+  for (let i = 1; i <= Math.min(2, pdf.numPages); i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    metaText += content.items.map((it) => it.str).join(" ") + "\n";
+  }
+  const paperMeta = extractPaperMetaFromPdfText(metaText);
+
+  const { startPage, endPage } = getQuestionPdfPageRange(pdf.numPages);
   let fullText = "";
-  for (let i = 1; i <= pdf.numPages; i++) {
+  for (let i = startPage; i <= endPage; i++) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
     fullText += content.items.map((it) => it.str).join(" ") + "\n";
   }
-  const paperMeta = extractPaperMetaFromPdfText(fullText);
   const { parseTextToQuestions } = await import("./pdfQuestionParser.js");
   const questions = parseTextToQuestions(fullText);
   const imageMap = await extractQuestionImagesByNumber(pdf);
@@ -230,10 +330,8 @@ export async function parsePdfBytesToQuestionsWithImages(uint8Array) {
     if (n == null || !imageMap.has(n)) return;
     const entry = imageMap.get(n);
     const dataUrl = entry && typeof entry === "object" && entry.dataUrl ? entry.dataUrl : entry;
-    const hasFigure = entry && typeof entry === "object" && entry.hasFigure === true;
-    const stem = (q.question || "").toString();
-    const keywordHint = FIGURE_KEYWORD_RE.test(stem);
-    if (hasFigure || keywordHint) {
+    if (dataUrl) {
+      // Always attach full vertical slice: stem + in-question figure + options (1)–(4), not only “diagram” items.
       q.questionImage = dataUrl;
     }
   });

@@ -131,6 +131,9 @@ function doPost(e) {
     } catch (parseErr) {
       return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Invalid JSON' })).setMimeType(ContentService.MimeType.JSON);
     }
+    if (data.action === 'setTestCodeActive') {
+      return runSetTestCodeActive_(data.adminSecret, data.code, data.active);
+    }
     // Online test: metadata JSON first (always), then video in separate request — same submissionKey
     if (data.action === 'submitTestMetadata' && data.metadata) {
       return doPostSubmitTestMetadata(data);
@@ -242,7 +245,8 @@ function doPostTestSubmission(data) {
 
     var testCode = (metadata.testCode || '').toString().trim().toUpperCase();
     // Append row as pending first so admin sees "Pending" while upload runs
-    var secZip = (metadata.secondaryCode || '').toString().trim().toUpperCase();
+    var secZip = normalizeMetadataStudentKey_(metadata.secondaryCode || '');
+    var gateZip = gatePasscodeFromMetadata_(metadata);
     sheet.appendRow([
       timestamp,
       metadata.studentName || '',
@@ -262,7 +266,8 @@ function doPostTestSubmission(data) {
       '',
       '',
       folder.getId(),
-      secZip
+      secZip,
+      gateZip
     ]);
     lastRow = sheet.getLastRow();
 
@@ -371,6 +376,208 @@ function findQuestionPaperRowById(sheet, paperId) {
   return -1;
 }
 
+/** Count TestCodes rows whose QuestionPaperId (col D) matches. */
+function countTestCodesUsingPaperId_(paperId) {
+  var sheet = getOrCreateTestCodesSheet();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return 0;
+  var numCols = Math.max(4, sheet.getLastColumn());
+  var data = sheet.getRange(2, 1, lastRow, numCols).getValues();
+  var pid = String(paperId || '').trim();
+  var n = 0;
+  var i;
+  for (i = 0; i < data.length; i++) {
+    if (String(data[i][3] || '').trim() === pid) n++;
+  }
+  return n;
+}
+
+/** Delete TestSessions rows for primary test code. If onlyInProgress, only status in_progress. Returns count removed. */
+function deleteTestSessionsForCode_(code, onlyInProgress) {
+  var want = String(code || '').trim().toUpperCase();
+  if (!want) return 0;
+  var sheet = getOrCreateTestSessionsSheet();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return 0;
+  var sCols = Math.max(10, sheet.getLastColumn());
+  var removed = 0;
+  var r;
+  for (r = lastRow; r >= 2; r--) {
+    var vals = sheet.getRange(r, 1, r, sCols).getValues()[0];
+    if (String(vals[0] || '').trim().toUpperCase() !== want) continue;
+    if (onlyInProgress) {
+      var st = String(vals[4] || '').trim().toLowerCase();
+      if (st !== 'in_progress') continue;
+    }
+    sheet.deleteRow(r);
+    removed++;
+  }
+  return removed;
+}
+
+/** Move a Drive file or folder to trash; ignore errors (already trashed, missing id, permissions). */
+function trashDriveItemByIdSafe_(id) {
+  var s = id != null ? String(id).trim() : '';
+  if (!s) return;
+  try {
+    DriveApp.getFileById(s).setTrashed(true);
+  } catch (e) {
+    Logger.log('trashDriveItemByIdSafe_: ' + s + ' — ' + e.toString());
+  }
+}
+
+/**
+ * From TestSubmissions row values (0-based): legacy zip File ID (col 10), Metadata file ID (col 16),
+ * Drive folder ID (col 18). Trashes metadata and zip first, then session folder (contains recording etc.).
+ */
+function trashDriveArtifactsForSubmissionRow_(vals) {
+  if (!vals || vals.length < 10) return;
+  var legacyZipId = vals[9] != null ? String(vals[9]).trim() : '';
+  var metaId = vals.length > 15 && vals[15] != null ? String(vals[15]).trim() : '';
+  var folderId = vals.length > 17 && vals[17] != null ? String(vals[17]).trim() : '';
+  trashDriveItemByIdSafe_(metaId);
+  trashDriveItemByIdSafe_(legacyZipId);
+  trashDriveItemByIdSafe_(folderId);
+}
+
+/** Trash immediate child folders and files under a root (e.g. empty uploads after sheet wipe). Returns counts. */
+function trashAllImmediateChildrenOfFolder_(folder) {
+  var out = { folders: 0, files: 0 };
+  if (!folder) return out;
+  var sub = folder.getFolders();
+  while (sub.hasNext()) {
+    try {
+      sub.next().setTrashed(true);
+      out.folders++;
+    } catch (e) {
+      Logger.log('trashAllImmediateChildrenOfFolder_ folder: ' + e.toString());
+    }
+  }
+  var files = folder.getFiles();
+  while (files.hasNext()) {
+    try {
+      files.next().setTrashed(true);
+      out.files++;
+    } catch (e2) {
+      Logger.log('trashAllImmediateChildrenOfFolder_ file: ' + e2.toString());
+    }
+  }
+  return out;
+}
+
+/** Bulk reset confirmation: case-insensitive, any spacing. */
+function isBulkResetConfirmOk_(raw) {
+  var p = String(raw || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return (
+    p === 'everything' ||
+    p === 'delete everything' ||
+    p === 'delete all test data' ||
+    p === 'delete all' ||
+    p === 'yes delete all'
+  );
+}
+
+/** Read all submission rows, trash linked Drive items, delete all data rows. Returns { rows: number }. */
+function clearAllSubmissionsSheetAndTrashDrive_() {
+  var sheet = getOrCreateTestSubmissionsSheet();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { rows: 0 };
+  var numCols = Math.max(20, sheet.getLastColumn());
+  var data = sheet.getRange(2, 1, lastRow, numCols).getValues();
+  var i;
+  for (i = 0; i < data.length; i++) {
+    trashDriveArtifactsForSubmissionRow_(data[i]);
+  }
+  sheet.deleteRows(2, lastRow - 1);
+  return { rows: data.length };
+}
+
+/** Delete TestSubmissions rows where col 15 = test code. If trashDrive, move linked Drive files/folders to trash first. */
+function deleteSubmissionsForTestCode_(code, trashDrive) {
+  var want = String(code || '').trim().toUpperCase();
+  if (!want) return 0;
+  var doTrash = trashDrive === true;
+  var sheet = getOrCreateTestSubmissionsSheet();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return 0;
+  var numCols = Math.max(19, sheet.getLastColumn());
+  var removed = 0;
+  var r;
+  for (r = lastRow; r >= 2; r--) {
+    var vals = sheet.getRange(r, 1, r, numCols).getValues()[0];
+    if (String(vals[14] || '').trim().toUpperCase() !== want) continue;
+    if (doTrash) trashDriveArtifactsForSubmissionRow_(vals);
+    sheet.deleteRow(r);
+    removed++;
+  }
+  return removed;
+}
+
+/** Delete ResumeCodes rows where PrimaryCode (col B) matches. Returns count removed. */
+function deleteResumeCodesForPrimary_(code) {
+  var want = String(code || '').trim().toUpperCase();
+  if (!want) return 0;
+  var sheet = getOrCreateResumeCodesSheet();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return 0;
+  var removed = 0;
+  var r;
+  for (r = lastRow; r >= 2; r--) {
+    var prim = String(sheet.getRange(r, 2).getValue() || '').trim().toUpperCase();
+    if (prim !== want) continue;
+    sheet.deleteRow(r);
+    removed++;
+  }
+  return removed;
+}
+
+/** Delete TestSessions rows matching code + email (any status). Returns count removed. */
+function deleteTestSessionsForCodeAndEmail_(code, email) {
+  var wantCode = String(code || '').trim().toUpperCase();
+  var wantEmail = String(email || '').trim().toLowerCase();
+  if (!wantCode || !wantEmail) return 0;
+  var sheet = getOrCreateTestSessionsSheet();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return 0;
+  var sCols = Math.max(7, sheet.getLastColumn());
+  var removed = 0;
+  var r;
+  for (r = lastRow; r >= 2; r--) {
+    var vals = sheet.getRange(r, 1, r, sCols).getValues()[0];
+    if (String(vals[0] || '').trim().toUpperCase() !== wantCode) continue;
+    if (String(vals[1] || '').trim().toLowerCase() !== wantEmail) continue;
+    sheet.deleteRow(r);
+    removed++;
+  }
+  return removed;
+}
+
+/** Delete TestSubmissions rows for code + email; if timestamp provided, must match col A string. Returns count removed. */
+function deleteSubmissionsForCodeEmailTimestamp_(code, email, timestamp) {
+  var wantCode = String(code || '').trim().toUpperCase();
+  var wantEmail = String(email || '').trim().toLowerCase();
+  if (!wantCode || !wantEmail) return 0;
+  var ts = timestamp != null ? String(timestamp).trim() : '';
+  var sheet = getOrCreateTestSubmissionsSheet();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return 0;
+  var numCols = Math.max(19, sheet.getLastColumn());
+  var removed = 0;
+  var r;
+  for (r = lastRow; r >= 2; r--) {
+    var vals = sheet.getRange(r, 1, r, numCols).getValues()[0];
+    if (String(vals[14] || '').trim().toUpperCase() !== wantCode) continue;
+    if (String(vals[2] || '').trim().toLowerCase() !== wantEmail) continue;
+    if (ts) {
+      var rowTs = vals[0] != null ? String(vals[0]).trim() : '';
+      if (rowTs !== ts) continue;
+    }
+    sheet.deleteRow(r);
+    removed++;
+  }
+  return removed;
+}
+
 function getOrCreatePaperImageSubfolder(paperId, paperDisplayName) {
   var root = getOrCreateQuestionPaperImagesRootFolder();
   var safeName = sanitizeDriveSegment(paperDisplayName || 'Paper', 55);
@@ -471,7 +678,7 @@ function doPostCreateQuestionPaper(data) {
       return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Question set too large' })).setMimeType(ContentService.MimeType.JSON);
     }
     var durationMinutes = Number(data.durationMinutes);
-    if (isNaN(durationMinutes) || durationMinutes < 1) durationMinutes = 30;
+    if (isNaN(durationMinutes) || durationMinutes < 1) durationMinutes = 120;
     if (durationMinutes > 600) durationMinutes = 600;
     var paperMetaStr = (data.paperMeta || '').toString().trim();
     if (paperMetaStr.length > 12000) {
@@ -634,7 +841,8 @@ function doPostSubmitTestMetadata(data) {
     var metaFile = sessionFolder.createFile(metaBlob);
 
     var testCode = (metadata.testCode || '').toString().trim().toUpperCase();
-    var secMeta = (metadata.secondaryCode || '').toString().trim().toUpperCase();
+    var secMeta = normalizeMetadataStudentKey_(metadata.secondaryCode || '');
+    var gateMeta = gatePasscodeFromMetadata_(metadata);
     sheet = getOrCreateTestSubmissionsSheet();
     sheet.appendRow([
       timestamp,
@@ -655,7 +863,8 @@ function doPostSubmitTestMetadata(data) {
       metaFile.getId(),
       submissionKey,
       sessionFolder.getId(),
-      secMeta
+      secMeta,
+      gateMeta
     ]);
     lastRow = sheet.getLastRow();
 
@@ -724,7 +933,7 @@ function doPostSubmitTestVideo(data) {
     if (lastRow < 2) {
       return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'No submission row for key' })).setMimeType(ContentService.MimeType.JSON);
     }
-    var numCols = Math.max(18, sheet.getLastColumn());
+    var numCols = Math.max(20, sheet.getLastColumn());
     var rows = sheet.getRange(2, 1, lastRow, numCols).getValues();
     var found = -1;
     var keyCol = 16;
@@ -785,15 +994,21 @@ function doPostSubmitTestVideo(data) {
       sheet.getRange(found, 12).setValue(fileSizeBytes);
       sheet.getRange(found, 13).setValue('uploaded');
       if (sheet.getLastColumn() >= 14) sheet.getRange(found, 14).setValue('');
-      var secVid = (metaMin.secondaryCode || '').toString().trim().toUpperCase();
+      var secVid = normalizeMetadataStudentKey_(metaMin.secondaryCode || '');
       if (secVid && sheet.getLastColumn() >= 19) {
         var curS = String(sheet.getRange(found, 19).getValue() || '').trim();
         if (!curS) sheet.getRange(found, 19).setValue(secVid);
       }
+      var gateVid = gatePasscodeFromMetadata_(metaMin);
+      if (gateVid && sheet.getLastColumn() >= 20) {
+        var curG = String(sheet.getRange(found, 20).getValue() || '').trim();
+        if (!curG) sheet.getRange(found, 20).setValue(gateVid);
+      }
     } else {
       var timestamp = Utilities.formatDate(new Date(), 'Asia/Kolkata', 'yyyy-MM-dd_HH-mm-ss');
       var testCode = (metaMin.testCode || '').toString().trim().toUpperCase();
-      var secOrphan = (metaMin.secondaryCode || '').toString().trim().toUpperCase();
+      var secOrphan = normalizeMetadataStudentKey_(metaMin.secondaryCode || '');
+      var gateOrphan = gatePasscodeFromMetadata_(metaMin);
       sheet.appendRow([
         timestamp,
         metaMin.studentName || '',
@@ -813,7 +1028,8 @@ function doPostSubmitTestVideo(data) {
         '',
         submissionKey,
         folder.getId(),
-        secOrphan
+        secOrphan,
+        gateOrphan
       ]);
     }
 
@@ -1032,24 +1248,76 @@ function getOrCreateTestSubmissionsSheet() {
   if (sheet.getLastColumn() < 17) sheet.getRange(1, 17).setValue('Submission key').setFontWeight('bold');
   if (sheet.getLastColumn() < 18) sheet.getRange(1, 18).setValue('Drive folder ID').setFontWeight('bold');
   if (sheet.getLastColumn() < 19) sheet.getRange(1, 19).setValue('Session code').setFontWeight('bold');
+  if (sheet.getLastColumn() < 20 || !String(sheet.getRange(1, 20).getValue() || '').trim()) {
+    sheet.getRange(1, 20).setValue('Gate passcode').setFontWeight('bold');
+  }
   return sheet;
 }
 
-/** Col 15 = test code (index 14), col 13 = status (index 12), col 19 = session (index 18). */
-function submissionExistsForTestAndSession(testCode, sessionCode) {
+/** Normalize email for gate / submission identity (lowercase). */
+function normalizeGateEmail_(raw) {
+  return (raw || '').toString().trim().toLowerCase();
+}
+
+/** Basic email shape check for gate (not full RFC). */
+function isPlausibleStudentEmail_(e) {
+  if (!e || e.length < 5 || e.length > 254) return false;
+  var at = e.indexOf('@');
+  if (at < 1 || at !== e.lastIndexOf('@')) return false;
+  var domain = e.slice(at + 1);
+  if (domain.indexOf('.') < 0 || domain.length < 3) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+}
+
+/** Stored in sheet col "Session code": student email (lowercase) or legacy uppercase session token. */
+function normalizeMetadataStudentKey_(raw) {
+  var s = (raw || '').toString().trim();
+  if (s.indexOf('@') >= 0) return normalizeGateEmail_(s);
+  return s.toUpperCase();
+}
+
+/** Col 15 = test code (index 14), col 13 = status (index 12), col 19 = student key (index 18) — email (new) or legacy session code. */
+function submissionExistsForTestAndSession(testCode, studentKey) {
   var code = (testCode || '').toString().trim().toUpperCase();
-  var sess = (sessionCode || '').toString().trim().toUpperCase();
-  if (!code || !sess) return false;
+  var raw = (studentKey || '').toString().trim();
+  if (!code || !raw) return false;
+  var keyNorm = raw.indexOf('@') >= 0 ? normalizeGateEmail_(raw) : raw.toUpperCase();
   var sheet = getOrCreateTestSubmissionsSheet();
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return false;
-  var numCols = Math.max(19, sheet.getLastColumn());
+  var numCols = Math.max(20, sheet.getLastColumn());
   var data = sheet.getRange(2, 1, lastRow, numCols).getValues();
   var i;
   for (i = 0; i < data.length; i++) {
     var row = data[i];
     if (String(row[14] || '').trim().toUpperCase() !== code) continue;
-    if (String(row[18] || '').trim().toUpperCase() !== sess) continue;
+    var cellKey = String(row[18] != null ? row[18] : '').trim();
+    var rowNorm = cellKey.indexOf('@') >= 0 ? normalizeGateEmail_(cellKey) : cellKey.toUpperCase();
+    if (rowNorm !== keyNorm) continue;
+    var st = String(row[12] || '').trim().toLowerCase();
+    if (st === 'failed' || st.indexOf('video_failed') === 0) continue;
+    if (st.indexOf('retry') === 0) continue;
+    if (st === 'uploaded' || st === 'metadata_uploaded' || st === 'pending') return true;
+  }
+  return false;
+}
+
+/** Col 15 = test code (index 14), col 20 = gate passcode (index 19), col 13 = status (index 12). */
+function submissionExistsForTestCodeAndGatePasscode(testCode, gatePasscode) {
+  var code = (testCode || '').toString().trim().toUpperCase();
+  var gate = (gatePasscode || '').toString().trim();
+  if (!code || !gate) return false;
+  var sheet = getOrCreateTestSubmissionsSheet();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return false;
+  var numCols = Math.max(20, sheet.getLastColumn());
+  var data = sheet.getRange(2, 1, lastRow, numCols).getValues();
+  var i;
+  for (i = 0; i < data.length; i++) {
+    var row = data[i];
+    if (String(row[14] || '').trim().toUpperCase() !== code) continue;
+    var cellGate = row.length >= 20 && row[19] != null ? String(row[19]).trim() : '';
+    if (cellGate !== gate) continue;
     var st = String(row[12] || '').trim().toLowerCase();
     if (st === 'failed' || st.indexOf('video_failed') === 0) continue;
     if (st.indexOf('retry') === 0) continue;
@@ -1060,8 +1328,8 @@ function submissionExistsForTestAndSession(testCode, sessionCode) {
 
 function getOrCreateTestSessionsSheet() {
   var sheet = getOrCreateStorageSheet('Adhyant_Storage_TestSessions', ['TestSessions'], function (s) {
-    s.getRange(1, 1, 1, 7).setValues([['Code', 'Email', 'Name', 'StartedAt', 'Status', 'SecondaryCode', 'Class']]);
-    s.getRange(1, 1, 1, 7).setFontWeight('bold');
+    s.getRange(1, 1, 1, 9).setValues([['Code', 'Email', 'Name', 'StartedAt', 'Status', 'SecondaryCode', 'Class', 'SessionToken', 'StudentResumePassword']]);
+    s.getRange(1, 1, 1, 9).setFontWeight('bold');
   });
   if (sheet.getLastColumn() < 6) {
     sheet.getRange(1, 6).setValue('SecondaryCode').setFontWeight('bold');
@@ -1069,13 +1337,46 @@ function getOrCreateTestSessionsSheet() {
   if (sheet.getLastColumn() < 7) {
     sheet.getRange(1, 7).setValue('Class').setFontWeight('bold');
   }
+  if (sheet.getLastColumn() < 8) {
+    sheet.getRange(1, 8).setValue('SessionToken').setFontWeight('bold');
+  }
+  if (sheet.getLastColumn() < 9 || !String(sheet.getRange(1, 9).getValue() || '').trim()) {
+    sheet.getRange(1, 9).setValue('StudentResumePassword').setFontWeight('bold');
+  }
+  if (sheet.getLastColumn() < 10 || !String(sheet.getRange(1, 10).getValue() || '').trim()) {
+    sheet.getRange(1, 10).setValue('GatePasscode').setFontWeight('bold');
+  }
   return sheet;
+}
+
+function newAttemptSessionToken_() {
+  return Utilities.getUuid().replace(/-/g, '');
+}
+
+/** @returns {{ row: number, status: string, sessionToken: string }} row is 1-based sheet row or -1 */
+function findTestSessionRow_(code, emailNorm) {
+  var wantCode = String(code || '').trim().toUpperCase();
+  var wantEmail = String(emailNorm || '').trim().toLowerCase();
+  var sheet = getOrCreateTestSessionsSheet();
+  var last = sheet.getLastRow();
+  if (last < 2) return { row: -1, status: '', sessionToken: '' };
+  var n = Math.max(10, sheet.getLastColumn());
+  var data = sheet.getRange(2, 1, last, n).getValues();
+  var i;
+  for (i = 0; i < data.length; i++) {
+    if (String(data[i][0]).trim().toUpperCase() === wantCode && String(data[i][1]).trim().toLowerCase() === wantEmail) {
+      var st = data[i].length >= 5 && data[i][4] != null ? String(data[i][4]).trim().toLowerCase() : '';
+      var tok = data[i].length >= 8 && data[i][7] != null ? String(data[i][7]).trim() : '';
+      return { row: i + 2, status: st, sessionToken: tok };
+    }
+  }
+  return { row: -1, status: '', sessionToken: '' };
 }
 
 function getOrCreateTestCodesSheet() {
   var sheet = getOrCreateStorageSheet('Adhyant_Storage_TestCodes', ['TestCodes'], function (s) {
-    s.getRange(1, 1, 1, 6).setValues([['Code', 'CreatedAt', 'CreatedBy', 'QuestionPaperId', 'Started', 'Active']]);
-    s.getRange(1, 1, 1, 6).setFontWeight('bold');
+    s.getRange(1, 1, 1, 7).setValues([['Code', 'CreatedAt', 'CreatedBy', 'QuestionPaperId', 'Started', 'Active', 'AccessPassword']]);
+    s.getRange(1, 1, 1, 7).setFontWeight('bold');
   });
   if (sheet.getLastColumn() < 5) {
     sheet.getRange(1, 5).setValue('Started').setFontWeight('bold');
@@ -1083,8 +1384,285 @@ function getOrCreateTestCodesSheet() {
   if (sheet.getLastColumn() < 6 || !sheet.getRange(1, 6).getValue()) {
     sheet.getRange(1, 6).setValue('Active').setFontWeight('bold');
   }
+  if (sheet.getLastColumn() < 7 || !String(sheet.getRange(1, 7).getValue() || '').trim()) {
+    sheet.getRange(1, 7).setValue('AccessPassword').setFontWeight('bold');
+  }
+  if (sheet.getLastColumn() < 8 || !String(sheet.getRange(1, 8).getValue() || '').trim()) {
+    sheet.getRange(1, 8).setValue('StudentPasscodeQuota').setFontWeight('bold');
+  }
   return sheet;
 }
+
+/** One row per issued student slot passcode: TestCode, Passcode, ClaimedEmail (empty until first recordTestStart). */
+function getOrCreateTestCodeStudentPasscodesSheet() {
+  return getOrCreateStorageSheet('Adhyant_Storage_TestCodeStudentPasscodes', ['TestCodeStudentPasscodes'], function (s) {
+    s.getRange(1, 1, 1, 3).setValues([['TestCode', 'Passcode', 'ClaimedEmail']]);
+    s.getRange(1, 1, 1, 3).setFontWeight('bold');
+  });
+}
+
+function normalizeStudentSlotPasscode_(raw) {
+  return String(raw || '').trim().toUpperCase();
+}
+
+function getStudentPasscodeQuotaFromTestRow_(row) {
+  if (!row || row.length < 8) return 0;
+  var q = parseInt(String(row[7] != null ? row[7] : '0'), 10);
+  if (isNaN(q) || q < 0) return 0;
+  return q;
+}
+
+function deleteStudentPasscodesForPrimary_(primaryCode) {
+  var want = String(primaryCode || '').trim().toUpperCase();
+  if (!want) return 0;
+  var sheet = getOrCreateTestCodeStudentPasscodesSheet();
+  var last = sheet.getLastRow();
+  if (last < 2) return 0;
+  var data = sheet.getRange(2, 1, last, 1).getValues();
+  var toDelete = [];
+  var i;
+  for (i = data.length - 1; i >= 0; i--) {
+    if (String(data[i][0] || '').trim().toUpperCase() === want) {
+      toDelete.push(i + 2);
+    }
+  }
+  toDelete.sort(function (a, b) {
+    return b - a;
+  });
+  for (i = 0; i < toDelete.length; i++) {
+    sheet.deleteRow(toDelete[i]);
+  }
+  return toDelete.length;
+}
+
+function loadStudentPasscodeDetailsByPrimary_() {
+  var sheet = getOrCreateTestCodeStudentPasscodesSheet();
+  var last = sheet.getLastRow();
+  var by = {};
+  if (last < 2) return by;
+  var data = sheet.getRange(2, 1, last, 3).getValues();
+  var i;
+  for (i = 0; i < data.length; i++) {
+    var tc = String(data[i][0] || '').trim().toUpperCase();
+    var pc = String(data[i][1] != null ? data[i][1] : '').trim();
+    var em = String(data[i][2] != null ? data[i][2] : '').trim().toLowerCase();
+    if (!tc || !pc) continue;
+    if (!by[tc]) by[tc] = [];
+    by[tc].push({ passcode: pc, claimedByEmail: em || null });
+  }
+  return by;
+}
+
+function loadAllStudentPasscodesForUniqueness_() {
+  var set = {};
+  var sheet = getOrCreateTestCodeStudentPasscodesSheet();
+  var last = sheet.getLastRow();
+  if (last < 2) return set;
+  var col = sheet.getRange(2, 2, last, 2).getValues();
+  var i;
+  for (i = 0; i < col.length; i++) {
+    var p = normalizeStudentSlotPasscode_(col[i][0]);
+    if (p) set[p] = true;
+  }
+  return set;
+}
+
+function generateUniqueStudentSlotPasscodes_(count) {
+  var n = parseInt(count, 10);
+  if (!n || n < 1) return [];
+  var existing = loadAllStudentPasscodesForUniqueness_();
+  var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  var out = [];
+  var safety = 0;
+  while (out.length < n && safety < n * 200) {
+    safety++;
+    var s = '';
+    var j;
+    for (j = 0; j < 8; j++) {
+      s += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    if (!existing[s]) {
+      existing[s] = true;
+      out.push(s);
+    }
+  }
+  return out;
+}
+
+function appendStudentPasscodesForTest_(primaryCode, passcodes) {
+  var pc = String(primaryCode || '').trim().toUpperCase();
+  if (!pc || !passcodes || !passcodes.length) return;
+  var sheet = getOrCreateTestCodeStudentPasscodesSheet();
+  var i;
+  for (i = 0; i < passcodes.length; i++) {
+    sheet.appendRow([pc, String(passcodes[i]).trim().toUpperCase(), '']);
+  }
+}
+
+function getStudentPasscodeQuotaForTestCode_(testCode) {
+  var c = String(testCode || '').trim().toUpperCase();
+  var sheet = getOrCreateTestCodesSheet();
+  var last = sheet.getLastRow();
+  if (last < 2) return 0;
+  var numCols = Math.max(8, sheet.getLastColumn());
+  var data = sheet.getRange(2, 1, last, numCols).getValues();
+  var i;
+  for (i = 0; i < data.length; i++) {
+    if (String(data[i][0]).trim().toUpperCase() === c) {
+      return getStudentPasscodeQuotaFromTestRow_(data[i]);
+    }
+  }
+  return 0;
+}
+
+/** Distinct student emails on TestSessions for this code, excluding abandoned rows (frees a slot after “start over”). */
+function countDistinctActiveStudentEmailsForTestCode_(testCode) {
+  var code = String(testCode || '').trim().toUpperCase();
+  if (!code) return 0;
+  var sheet = getOrCreateTestSessionsSheet();
+  var last = sheet.getLastRow();
+  if (last < 2) return 0;
+  var nCol = Math.max(5, sheet.getLastColumn());
+  var data = sheet.getRange(2, 1, last, nCol).getValues();
+  var set = {};
+  var i;
+  for (i = 0; i < data.length; i++) {
+    if (String(data[i][0] || '').trim().toUpperCase() !== code) continue;
+    var st = data[i].length >= 5 && data[i][4] != null ? String(data[i][4]).trim().toLowerCase() : '';
+    if (st === 'abandoned') continue;
+    var em = String(data[i][1] || '').trim().toLowerCase();
+    if (em) set[em] = true;
+  }
+  var n = 0;
+  var k;
+  for (k in set) {
+    if (set.hasOwnProperty(k)) n++;
+  }
+  return n;
+}
+
+function gatePasscodeFromMetadata_(metadata) {
+  var m = metadata || {};
+  return String(m.gatePasscode || m.gatePassword || '').trim();
+}
+
+function isPasscodeInPoolForTest_(primaryCode, passNorm) {
+  var code = String(primaryCode || '').trim().toUpperCase();
+  var p = normalizeStudentSlotPasscode_(passNorm);
+  if (!code || !p) return false;
+  var sheet = getOrCreateTestCodeStudentPasscodesSheet();
+  var last = sheet.getLastRow();
+  if (last < 2) return false;
+  var data = sheet.getRange(2, 1, last, 2).getValues();
+  var i;
+  for (i = 0; i < data.length; i++) {
+    if (String(data[i][0] || '').trim().toUpperCase() === code &&
+        normalizeStudentSlotPasscode_(data[i][1]) === p) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * @returns {{ ok: boolean, message?: string }}
+ */
+function claimStudentPasscodeForEmail_(primaryCode, passNorm, emailLower) {
+  var code = String(primaryCode || '').trim().toUpperCase();
+  var p = normalizeStudentSlotPasscode_(passNorm);
+  var em = String(emailLower || '').trim().toLowerCase();
+  if (!code || !p || !em) {
+    return { ok: false, message: 'Missing passcode or email' };
+  }
+  var sheet = getOrCreateTestCodeStudentPasscodesSheet();
+  var last = sheet.getLastRow();
+  if (last < 2) {
+    return { ok: false, message: 'No passcodes configured for this test' };
+  }
+  var data = sheet.getRange(2, 1, last, 3).getValues();
+  var i;
+  for (i = 0; i < data.length; i++) {
+    if (String(data[i][0] || '').trim().toUpperCase() !== code) continue;
+    if (normalizeStudentSlotPasscode_(data[i][1]) !== p) continue;
+    var rowIx = i + 2;
+    var claimed = String(data[i][2] != null ? data[i][2] : '').trim().toLowerCase();
+    if (!claimed) {
+      sheet.getRange(rowIx, 3).setValue(em);
+      SpreadsheetApp.flush();
+      return { ok: true };
+    }
+    if (claimed === em) {
+      return { ok: true };
+    }
+    return { ok: false, message: 'This passcode is already linked to another student.' };
+  }
+  return { ok: false, message: 'Invalid passcode for this test' };
+}
+
+function releaseStudentPasscodeClaim_(primaryCode, passNorm) {
+  var code = String(primaryCode || '').trim().toUpperCase();
+  var p = normalizeStudentSlotPasscode_(passNorm);
+  if (!code || !p) return;
+  var sheet = getOrCreateTestCodeStudentPasscodesSheet();
+  var last = sheet.getLastRow();
+  if (last < 2) return;
+  var data = sheet.getRange(2, 1, last, 3).getValues();
+  var i;
+  for (i = 0; i < data.length; i++) {
+    if (String(data[i][0] || '').trim().toUpperCase() === code &&
+        normalizeStudentSlotPasscode_(data[i][1]) === p) {
+      sheet.getRange(i + 2, 3).setValue('');
+      SpreadsheetApp.flush();
+      return;
+    }
+  }
+}
+
+/** Clear ClaimedEmail for every passcode row for this test (e.g. after bulk session wipe). */
+function clearAllClaimsForTestPasscodes_(primaryCode) {
+  var want = String(primaryCode || '').trim().toUpperCase();
+  if (!want) return 0;
+  var sheet = getOrCreateTestCodeStudentPasscodesSheet();
+  var last = sheet.getLastRow();
+  if (last < 2) return 0;
+  var data = sheet.getRange(2, 1, last, 3).getValues();
+  var cleared = 0;
+  var i;
+  for (i = 0; i < data.length; i++) {
+    if (String(data[i][0] || '').trim().toUpperCase() !== want) continue;
+    if (String(data[i][2] || '').trim()) {
+      sheet.getRange(i + 2, 3).setValue('');
+      cleared++;
+    }
+  }
+  if (cleared) SpreadsheetApp.flush();
+  return cleared;
+}
+
+/** Random gate password (legacy / manual organiser password in sheet col 7). */
+function randomAccessPassword_() {
+  var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  var out = '';
+  for (var i = 0; i < 8; i++) {
+    out += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return out;
+}
+
+/** Stored in TestCodes col 7: gate password is chosen by each student (not issued by admin). */
+var STUDENT_GATE_SENTINEL = '__ADHYANT_STUDENT_GATE__';
+
+function isStudentGateMode_(accessPassRow) {
+  return String(accessPassRow || '').trim() === STUDENT_GATE_SENTINEL;
+}
+
+/** Student-chosen passcode at gate: sentinel in sheet, empty col, or legacy row with no organiser password. */
+function isStudentChosenGatePasscode_(accessPassRow) {
+  var ap = String(accessPassRow || '').trim();
+  return !ap || isStudentGateMode_(ap);
+}
+
+var STUDENT_GATE_PASSWORD_MIN_LEN = 4;
 
 /** Col F Active: Yes (default) = code can be used; No = blocked (validate fails). */
 function parseRowActiveFlag(row) {
@@ -1188,6 +1766,47 @@ function getOrCreateQuestionPapersSheet() {
     sheet.getRange(1, 8).setValue('AnswerKeyPresent').setFontWeight('bold');
   }
   return sheet;
+}
+
+/**
+ * Admin: open/close test code (column 6 Active on TestCodes sheet).
+ * Used from doGet (query string) and doPost (JSON body) so "Close code" works even when GET redirects drop query params.
+ */
+function runSetTestCodeActive_(adminSecret, codeRaw, activeRaw) {
+  try {
+    var adminSecret2 = (adminSecret || '').toString();
+    var storedSecret2 = PropertiesService.getScriptProperties().getProperty('ADMIN_SECRET') || '';
+    if (!adminSecret2 || adminSecret2 !== storedSecret2) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Unauthorized' })).setMimeType(ContentService.MimeType.JSON);
+    }
+    var code2 = (codeRaw || '').toString().trim().toUpperCase();
+    var activeParam = String(activeRaw != null ? activeRaw : 'yes').trim().toLowerCase();
+    var setYes = (activeParam === 'yes' || activeParam === 'true' || activeParam === '1' || activeParam === 'on');
+    if (!code2) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Code required' })).setMimeType(ContentService.MimeType.JSON);
+    }
+    var sheet2 = getOrCreateTestCodesSheet();
+    var lastRow2 = sheet2.getLastRow();
+    if (lastRow2 < 2) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'No codes found' })).setMimeType(ContentService.MimeType.JSON);
+    }
+    var numCols2 = Math.max(6, sheet2.getLastColumn());
+    var data2 = sheet2.getRange(2, 1, lastRow2, numCols2).getValues();
+    for (var j = 0; j < data2.length; j++) {
+      if (String(data2[j][0]).trim().toUpperCase() === code2) {
+        sheet2.getRange(j + 2, 6).setValue(setYes ? 'Yes' : 'No');
+        SpreadsheetApp.flush();
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'success',
+          message: setYes ? 'Code is open again.' : 'Code closed. Students cannot use it.',
+          active: setYes
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+    return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Code not found' })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err2) {
+    return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err2.toString() })).setMimeType(ContentService.MimeType.JSON);
+  }
 }
 
 // Handle GET: action=list returns submissions (metadata only); action=download&fileId=xxx returns zip as base64 for admin download
@@ -1313,27 +1932,28 @@ function doGet(e) {
       if (!adminSecret || adminSecret !== storedSecret) {
         return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Unauthorized' })).setMimeType(ContentService.MimeType.JSON);
       }
+      var slotCount = parseInt(String(params.studentPasscodeCount || params.passcodeSlots || params.maxStudents || '0'), 10);
+      if (!slotCount || slotCount < 1 || slotCount > 500) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'error',
+          message: 'studentPasscodeCount (or maxStudents) required: 1–500. Maximum number of students who can take this test; each student creates their own passcode at the gate.'
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
       var sheet = getOrCreateTestCodesSheet();
       var code = randomTestCode();
       var createdAt = Utilities.formatDate(new Date(), 'Asia/Kolkata', 'yyyy-MM-dd HH:mm:ss');
       var createdBy = params.adminEmail || '';
       var questionPaperId = (params.questionPaperId || '').toString().trim();
-      sheet.appendRow([code, createdAt, createdBy, questionPaperId, '', 'Yes']);
-      var nSecondary = parseInt(String(params.resumeCodeCount != null ? params.resumeCodeCount : params.secondaryCount != null ? params.secondaryCount : '25'), 10);
-      if (isNaN(nSecondary) || nSecondary < 1) nSecondary = 25;
-      if (nSecondary > 5000) nSecondary = 5000;
-      var existingSet = loadExistingSecondaryCodeSet();
-      var secondaryList = generateUniqueResumeCodes(nSecondary, existingSet);
-      var resumeSheet = getOrCreateResumeCodesSheet();
-      var si;
-      for (si = 0; si < secondaryList.length; si++) {
-        resumeSheet.appendRow([secondaryList[si], code]);
-      }
+      sheet.appendRow([code, createdAt, createdBy, questionPaperId, '', 'Yes', STUDENT_GATE_SENTINEL, slotCount]);
       return ContentService.createTextOutput(JSON.stringify({
         status: 'success',
         code: code,
-        secondaryCodes: secondaryList,
-        secondaryCount: secondaryList.length
+        accessPassword: null,
+        studentGatePassword: false,
+        studentPasscodeQuota: slotCount,
+        studentPasscodes: [],
+        secondaryCodes: [],
+        secondaryCount: 0
       })).setMimeType(ContentService.MimeType.JSON);
     } catch (err) {
       return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
@@ -1345,42 +1965,61 @@ function doGet(e) {
       if (!code) {
         return ContentService.createTextOutput(JSON.stringify({ status: 'success', valid: false })).setMimeType(ContentService.MimeType.JSON);
       }
-      var secondaryParam = (params.secondaryCode || params.resumeCode || '').toString().trim().toUpperCase();
+      var pwdIn = (params.studentPassword || params.password || '').toString().trim();
+      var emailParam = normalizeGateEmail_(params.studentEmail || params.email || '');
       var sheet = getOrCreateTestCodesSheet();
       var lastRow = sheet.getLastRow();
       if (lastRow < 2) {
         return ContentService.createTextOutput(JSON.stringify({ status: 'success', valid: false })).setMimeType(ContentService.MimeType.JSON);
       }
-      var numCols = Math.max(6, sheet.getLastColumn());
+      var numCols = Math.max(8, sheet.getLastColumn());
       var data = sheet.getRange(2, 1, lastRow, numCols).getValues();
       for (var i = 0; i < data.length; i++) {
         if (String(data[i][0]).trim().toUpperCase() === code) {
           var questionPaperIdEarly = data[i][3] ? String(data[i][3]).trim() : '';
-          var secondaries = getSecondaryCodesForPrimary(code);
-          if (secondaries.length > 0) {
-            if (!secondaryParam) {
+          var accessPassRow = data[i].length >= 7 && data[i][6] != null ? String(data[i][6]).trim() : '';
+          var slotQuota = getStudentPasscodeQuotaFromTestRow_(data[i]);
+          if (slotQuota > 0) {
+            if (String(pwdIn).trim().length < STUDENT_GATE_PASSWORD_MIN_LEN) {
               return ContentService.createTextOutput(JSON.stringify({
                 status: 'success',
                 valid: false,
-                reason: 'secondary_required'
+                reason: 'password_too_short'
               })).setMimeType(ContentService.MimeType.JSON);
             }
-            if (secondaries.indexOf(secondaryParam) < 0) {
+          } else if (isStudentChosenGatePasscode_(accessPassRow)) {
+            if (String(pwdIn).trim().length < STUDENT_GATE_PASSWORD_MIN_LEN) {
               return ContentService.createTextOutput(JSON.stringify({
                 status: 'success',
                 valid: false,
-                reason: 'invalid_secondary'
+                reason: 'password_too_short'
               })).setMimeType(ContentService.MimeType.JSON);
             }
+          } else if (pwdIn !== accessPassRow) {
+            return ContentService.createTextOutput(JSON.stringify({
+              status: 'success',
+              valid: false,
+              reason: 'invalid_password'
+            })).setMimeType(ContentService.MimeType.JSON);
           }
-          if (secondaryParam && submissionExistsForTestAndSession(code, secondaryParam)) {
+          if (emailParam && isPlausibleStudentEmail_(emailParam) && submissionExistsForTestAndSession(code, emailParam)) {
             return ContentService.createTextOutput(JSON.stringify({
               status: 'success',
               valid: true,
               alreadySubmitted: true,
               started: true,
               questionPaperId: questionPaperIdEarly || null,
-              secondaryRequired: secondaries.length > 0
+              secondaryRequired: false
+            })).setMimeType(ContentService.MimeType.JSON);
+          }
+          if (pwdIn && submissionExistsForTestCodeAndGatePasscode(code, pwdIn)) {
+            return ContentService.createTextOutput(JSON.stringify({
+              status: 'success',
+              valid: true,
+              alreadySubmitted: true,
+              started: true,
+              questionPaperId: questionPaperIdEarly || null,
+              secondaryRequired: false
             })).setMimeType(ContentService.MimeType.JSON);
           }
           if (!parseRowActiveFlag(data[i])) {
@@ -1400,7 +2039,7 @@ function doGet(e) {
             valid: true,
             started: started,
             questionPaperId: questionPaperId || null,
-            secondaryRequired: secondaries.length > 0
+            secondaryRequired: false
           })).setMimeType(ContentService.MimeType.JSON);
         }
       }
@@ -1421,7 +2060,7 @@ function doGet(e) {
       if (lastRow < 2) {
         return ContentService.createTextOutput(JSON.stringify({ status: 'success', codes: [] })).setMimeType(ContentService.MimeType.JSON);
       }
-      var numCols = Math.max(6, sheet.getLastColumn());
+      var numCols = Math.max(8, sheet.getLastColumn());
       var data = sheet.getRange(2, 1, lastRow, numCols).getValues();
       var byPrimary = loadResumeCodesGroupedByPrimary();
       var codes = data.map(function (row) {
@@ -1435,6 +2074,10 @@ function doGet(e) {
           createdAt = createdAt != null ? String(createdAt) : '';
         }
         var ccode = String(row[0]).trim().toUpperCase();
+        var ap = row.length >= 7 && row[6] != null ? String(row[6]).trim() : '';
+        var quota = getStudentPasscodeQuotaFromTestRow_(row);
+        var usedSlots = quota > 0 ? countDistinctActiveStudentEmailsForTestCode_(ccode) : 0;
+        var studentGate = quota > 0 ? false : isStudentChosenGatePasscode_(ap);
         return {
           code: String(row[0]).trim(),
           createdAt: createdAt,
@@ -1442,6 +2085,11 @@ function doGet(e) {
           questionPaperId: row[3] ? String(row[3]).trim() : '',
           started: started,
           active: parseRowActiveFlag(row),
+          accessPassword: studentGate ? null : (ap || null),
+          studentGatePassword: studentGate,
+          studentPasscodeQuota: quota,
+          studentPasscodesClaimed: usedSlots,
+          studentPasscodesDetail: [],
           secondaryCodes: byPrimary[ccode] || []
         };
       });
@@ -1483,40 +2131,7 @@ function doGet(e) {
     }
   }
   if (action === 'setTestCodeActive') {
-    try {
-      var adminSecret2 = params.adminSecret || '';
-      var storedSecret2 = PropertiesService.getScriptProperties().getProperty('ADMIN_SECRET') || '';
-      if (!adminSecret2 || adminSecret2 !== storedSecret2) {
-        return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Unauthorized' })).setMimeType(ContentService.MimeType.JSON);
-      }
-      var code2 = (params.code || '').toString().trim().toUpperCase();
-      var activeParam = String(params.active != null ? params.active : 'yes').trim().toLowerCase();
-      var setYes = (activeParam === 'yes' || activeParam === 'true' || activeParam === '1' || activeParam === 'on');
-      if (!code2) {
-        return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Code required' })).setMimeType(ContentService.MimeType.JSON);
-      }
-      var sheet2 = getOrCreateTestCodesSheet();
-      var lastRow2 = sheet2.getLastRow();
-      if (lastRow2 < 2) {
-        return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'No codes found' })).setMimeType(ContentService.MimeType.JSON);
-      }
-      var numCols2 = Math.max(6, sheet2.getLastColumn());
-      var data2 = sheet2.getRange(2, 1, lastRow2, numCols2).getValues();
-      for (var j = 0; j < data2.length; j++) {
-        if (String(data2[j][0]).trim().toUpperCase() === code2) {
-          sheet2.getRange(j + 2, 6).setValue(setYes ? 'Yes' : 'No');
-          SpreadsheetApp.flush();
-          return ContentService.createTextOutput(JSON.stringify({
-            status: 'success',
-            message: setYes ? 'Code is open again.' : 'Code closed. Students cannot use it.',
-            active: setYes
-          })).setMimeType(ContentService.MimeType.JSON);
-        }
-      }
-      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Code not found' })).setMimeType(ContentService.MimeType.JSON);
-    } catch (err2) {
-      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err2.toString() })).setMimeType(ContentService.MimeType.JSON);
-    }
+    return runSetTestCodeActive_(params.adminSecret, params.code, params.active);
   }
   if (action === 'listPapers') {
     try {
@@ -1527,14 +2142,18 @@ function doGet(e) {
       }
       var numColsP = Math.max(8, sheet.getLastColumn());
       var data = sheet.getRange(2, 1, lastRow, numColsP).getValues();
-      var papers = data.map(function (row) {
-        var rawAk = row.length > 7 ? row[7] : undefined;
-        var answerKeyPresent = null;
-        if (rawAk !== undefined && rawAk !== null && String(rawAk).trim() !== '') {
-          answerKeyPresent = String(rawAk).trim().toLowerCase() === 'yes';
-        }
-        return { id: row[0], name: row[1], createdAt: row[2], createdBy: row[3], answerKeyPresent: answerKeyPresent };
-      });
+      var papers = data
+        .map(function (row) {
+          var rawAk = row.length > 7 ? row[7] : undefined;
+          var answerKeyPresent = null;
+          if (rawAk !== undefined && rawAk !== null && String(rawAk).trim() !== '') {
+            answerKeyPresent = String(rawAk).trim().toLowerCase() === 'yes';
+          }
+          return { id: row[0], name: row[1], createdAt: row[2], createdBy: row[3], answerKeyPresent: answerKeyPresent };
+        })
+        .filter(function (p) {
+          return p.id != null && String(p.id).trim() !== '';
+        });
       return ContentService.createTextOutput(JSON.stringify({ status: 'success', papers: papers })).setMimeType(ContentService.MimeType.JSON);
     } catch (err) {
       return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
@@ -1561,7 +2180,7 @@ function doGet(e) {
             questions = JSON.parse(questionsJson);
           } catch (e) {}
           var dm = data[i][5];
-          var durationMinutes = 30;
+          var durationMinutes = 120;
           if (dm !== null && dm !== undefined && dm !== '') {
             var n = Number(dm);
             if (!isNaN(n) && n > 0) durationMinutes = n;
@@ -1638,38 +2257,143 @@ function doGet(e) {
       return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
     }
   }
+  /** Serve question JPEG/PNG from Drive for <img src> — avoids broken drive.google.com/thumbnail embeds (referrer/CORP). */
+  if (action === 'servePaperQuestionImage') {
+    try {
+      var sidImg = (params.paperId || '').toString().trim();
+      var qixImg = parseInt(params.questionIndex, 10);
+      if (!sidImg || isNaN(qixImg) || qixImg < 0) {
+        return ContentService.createTextOutput('Not found').setMimeType(ContentService.MimeType.TEXT);
+      }
+      var sheetServe = getOrCreateQuestionPapersSheet();
+      var rowServe = findQuestionPaperRowById(sheetServe, sidImg);
+      if (rowServe < 0) {
+        return ContentService.createTextOutput('Not found').setMimeType(ContentService.MimeType.TEXT);
+      }
+      var qjsonServe = sheetServe.getRange(rowServe, 5).getValue();
+      var qarrServe = [];
+      try {
+        qarrServe = qjsonServe ? JSON.parse(String(qjsonServe)) : [];
+      } catch (eServe) {
+        return ContentService.createTextOutput('Not found').setMimeType(ContentService.MimeType.TEXT);
+      }
+      if (!Array.isArray(qarrServe) || qixImg >= qarrServe.length) {
+        return ContentService.createTextOutput('Not found').setMimeType(ContentService.MimeType.TEXT);
+      }
+      var qcellServe = qarrServe[qixImg];
+      var imgFidServe = qcellServe && qcellServe.imageFileId ? String(qcellServe.imageFileId).trim() : '';
+      if (!imgFidServe) {
+        return ContentService.createTextOutput('Not found').setMimeType(ContentService.MimeType.TEXT);
+      }
+      var driveFileServe = DriveApp.getFileById(imgFidServe);
+      var blobServe = driveFileServe.getBlob();
+      var mtServe = blobServe.getContentType();
+      if (!mtServe || String(mtServe).indexOf('image/') !== 0) {
+        mtServe = 'image/jpeg';
+      }
+      return ContentService.createBlobOutput(blobServe).setMimeType(mtServe);
+    } catch (errServe) {
+      return ContentService.createTextOutput('Not found').setMimeType(ContentService.MimeType.TEXT);
+    }
+  }
   if (action === 'recordTestStart') {
     try {
       var code = (params.code || '').toString().trim().toUpperCase();
       var email = (params.email || '').toString().trim();
       var name = (params.name || '').toString().trim();
-      var secStart = (params.secondaryCode || '').toString().trim().toUpperCase();
+      var secStart = normalizeGateEmail_(params.secondaryCode || params.studentGateEmail || params.email || '');
       var studentClassStart = (params.studentClass || params.class || '').toString().trim();
+      var resumePass = (params.resumePassword || params.studentResumePassword || '').toString().trim().slice(0, 80);
+      var gatePcRaw = (params.gatePasscode || params.gatePassword || '').toString().trim();
       if (!code) {
         return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Code required' })).setMimeType(ContentService.MimeType.JSON);
       }
+      var codeQuotaRt = getStudentPasscodeQuotaForTestCode_(code);
+      var gateForSession = gatePcRaw;
+      if (codeQuotaRt > 0) {
+        if (String(gatePcRaw).trim().length < STUDENT_GATE_PASSWORD_MIN_LEN) {
+          return ContentService.createTextOutput(JSON.stringify({
+            status: 'error',
+            message: 'Choose a passcode with at least ' + STUDENT_GATE_PASSWORD_MIN_LEN + ' characters (same one you used at the gate).'
+          })).setMimeType(ContentService.MimeType.JSON);
+        }
+        gateForSession = gatePcRaw;
+      } else if (gatePcRaw) {
+        gateForSession = gatePcRaw;
+      }
+      /** Students no longer set a separate "resume password"; mirror gate passcode for sheet col 9 when omitted. */
+      if (!resumePass && gateForSession) {
+        resumePass = String(gateForSession).trim().slice(0, 80);
+      }
       var sessionsSheet = getOrCreateTestSessionsSheet();
+      var nCol = Math.max(10, sessionsSheet.getLastColumn());
       var startedAt = Utilities.formatDate(new Date(), 'Asia/Kolkata', 'yyyy-MM-dd HH:mm:ss');
       var sData = sessionsSheet.getDataRange().getValues();
       for (var si = 1; si < sData.length; si++) {
         if (String(sData[si][0]).trim().toUpperCase() === code &&
             String(sData[si][1]).trim().toLowerCase() === email.toLowerCase()) {
+          var rowTok = sData[si].length >= 8 && sData[si][7] != null ? String(sData[si][7]).trim() : '';
+          var prevStRec = sData[si].length >= 5 && sData[si][4] != null ? String(sData[si][4]).trim().toLowerCase() : '';
+          if (prevStRec === 'abandoned' || !rowTok) {
+            rowTok = newAttemptSessionToken_();
+            sessionsSheet.getRange(si + 1, 8).setValue(rowTok);
+          }
           sessionsSheet.getRange(si + 1, 3).setValue(name);
           sessionsSheet.getRange(si + 1, 4).setValue(startedAt);
           sessionsSheet.getRange(si + 1, 5).setValue('in_progress');
-          if (sessionsSheet.getLastColumn() >= 6) {
+          if (nCol >= 6) {
             sessionsSheet.getRange(si + 1, 6).setValue(secStart);
           }
-          if (sessionsSheet.getLastColumn() >= 7 && studentClassStart) {
+          if (nCol >= 7 && studentClassStart) {
             sessionsSheet.getRange(si + 1, 7).setValue(studentClassStart);
           }
-          return ContentService.createTextOutput(JSON.stringify({ status: 'success', message: 'Test start recorded' })).setMimeType(ContentService.MimeType.JSON);
+          if (nCol >= 9 && resumePass) {
+            sessionsSheet.getRange(si + 1, 9).setValue(resumePass);
+          }
+          if (nCol >= 10 && gateForSession) {
+            sessionsSheet.getRange(si + 1, 10).setValue(gateForSession);
+          }
+          SpreadsheetApp.flush();
+          return ContentService.createTextOutput(JSON.stringify({ status: 'success', message: 'Test start recorded', sessionToken: rowTok })).setMimeType(ContentService.MimeType.JSON);
         }
       }
-      sessionsSheet.appendRow([code, email, name, startedAt, 'in_progress', secStart, studentClassStart]);
-      return ContentService.createTextOutput(JSON.stringify({ status: 'success', message: 'Test start recorded' })).setMimeType(ContentService.MimeType.JSON);
+      if (codeQuotaRt > 0) {
+        var usedNow = countDistinctActiveStudentEmailsForTestCode_(code);
+        if (usedNow >= codeQuotaRt) {
+          return ContentService.createTextOutput(JSON.stringify({
+            status: 'error',
+            message: 'Maximum number of students for this test has been reached. Contact the organiser if you need access.'
+          })).setMimeType(ContentService.MimeType.JSON);
+        }
+      }
+      var newTok = newAttemptSessionToken_();
+      sessionsSheet.appendRow([code, email, name, startedAt, 'in_progress', secStart, studentClassStart, newTok, resumePass, gateForSession || '']);
+      SpreadsheetApp.flush();
+      return ContentService.createTextOutput(JSON.stringify({ status: 'success', message: 'Test start recorded', sessionToken: newTok })).setMimeType(ContentService.MimeType.JSON);
     } catch (err) {
       return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+  if (action === 'abandonTestSession') {
+    try {
+      var codeAb = (params.code || '').toString().trim().toUpperCase();
+      var emailAb = (params.email || '').toString().trim();
+      if (!codeAb || !emailAb) {
+        return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Code and student email required' })).setMimeType(ContentService.MimeType.JSON);
+      }
+      var foundAb = findTestSessionRow_(codeAb, emailAb.toLowerCase());
+      if (foundAb.row < 0) {
+        return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Session not found' })).setMimeType(ContentService.MimeType.JSON);
+      }
+      if (foundAb.status !== 'in_progress') {
+        return ContentService.createTextOutput(JSON.stringify({ status: 'success', message: 'Nothing to abandon' })).setMimeType(ContentService.MimeType.JSON);
+      }
+      var shAb = getOrCreateTestSessionsSheet();
+      shAb.getRange(foundAb.row, 5).setValue('abandoned');
+      SpreadsheetApp.flush();
+      return ContentService.createTextOutput(JSON.stringify({ status: 'success', message: 'Session released' })).setMimeType(ContentService.MimeType.JSON);
+    } catch (errAb) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: errAb.toString() })).setMimeType(ContentService.MimeType.JSON);
     }
   }
   if (action === 'listTestCodeActivity') {
@@ -1687,18 +2411,22 @@ function doGet(e) {
       var sessionsSheet = getOrCreateTestSessionsSheet();
       var sLast = sessionsSheet.getLastRow();
       if (sLast >= 2) {
-        var sCols = Math.max(7, sessionsSheet.getLastColumn());
+        var sCols = Math.max(10, sessionsSheet.getLastColumn());
         var sData = sessionsSheet.getRange(2, 1, sLast, sCols).getValues();
         for (var si = 0; si < sData.length; si++) {
           if (String(sData[si][0]).trim().toUpperCase() === code && String(sData[si][4]).trim().toLowerCase() === 'in_progress') {
-            var secProg = sData[si].length >= 6 && sData[si][5] != null ? String(sData[si][5]).trim().toUpperCase() : '';
+            var secProg = sData[si].length >= 6 && sData[si][5] != null ? String(sData[si][5]).trim() : '';
             var classProg = sData[si].length >= 7 && sData[si][6] != null ? String(sData[si][6]).trim() : '';
+            var resumePwProg = sData[si].length >= 9 && sData[si][8] != null ? String(sData[si][8]).trim() : '';
+            var gateProg = sData[si].length >= 10 && sData[si][9] != null ? String(sData[si][9]).trim() : '';
             inProgress.push({
               email: String(sData[si][1]).trim(),
               name: String(sData[si][2]).trim(),
               startedAt: sData[si][3] != null ? String(sData[si][3]) : '',
               secondaryCode: secProg || null,
-              studentClass: classProg || null
+              gatePasscode: gateProg || null,
+              studentClass: classProg || null,
+              resumePassword: resumePwProg || null
             });
           }
         }
@@ -1706,21 +2434,23 @@ function doGet(e) {
       var submissions = [];
       var subSheet = getOrCreateTestSubmissionsSheet();
       var subLast = subSheet.getLastRow();
-      var numCols = Math.max(15, subSheet.getLastColumn());
+      var numCols = Math.max(20, subSheet.getLastColumn());
       if (subLast >= 2) {
         var subData = subSheet.getRange(2, 1, subLast, numCols).getValues();
         for (var ri = 0; ri < subData.length; ri++) {
           var row = subData[ri];
           var rowCode = (row.length >= 15 && row[14] != null && row[14] !== '') ? String(row[14]).trim().toUpperCase() : '';
           if (rowCode === code) {
-            var secSub = row.length >= 19 && row[18] != null ? String(row[18]).trim().toUpperCase() : '';
+            var secSub = row.length >= 19 && row[18] != null ? String(row[18]).trim() : '';
+            var gateSub = row.length >= 20 && row[19] != null ? String(row[19]).trim() : '';
             submissions.push({
               studentName: row[1] != null ? String(row[1]) : '',
               email: row[2] != null ? String(row[2]) : '',
               score: row[5] != null ? row[5] : '',
               total: row[6] != null ? row[6] : '',
               timestamp: row[0] != null ? String(row[0]) : '',
-              secondaryCode: secSub || null
+              secondaryCode: secSub || null,
+              gatePasscode: gateSub || null
             });
           }
         }
@@ -1735,9 +2465,250 @@ function doGet(e) {
       return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
     }
   }
+  if (action === 'deleteQuestionPaper') {
+    try {
+      var adminDelPaper = params.adminSecret || '';
+      var storedDelPaper = PropertiesService.getScriptProperties().getProperty('ADMIN_SECRET') || '';
+      if (!adminDelPaper || adminDelPaper !== storedDelPaper) {
+        return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Unauthorized' })).setMimeType(ContentService.MimeType.JSON);
+      }
+      var paperIdToDel = (params.paperId || params.id || '').toString().trim();
+      if (!paperIdToDel) {
+        return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'paperId required' })).setMimeType(ContentService.MimeType.JSON);
+      }
+      var nRef = countTestCodesUsingPaperId_(paperIdToDel);
+      if (nRef > 0) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'error',
+          message: 'Cannot delete: ' + nRef + ' test code(s) still reference this paper. Change their question paper or remove those codes in the sheet first.'
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      var qpSheet = getOrCreateQuestionPapersSheet();
+      var delRow = findQuestionPaperRowById(qpSheet, paperIdToDel);
+      if (delRow < 0) {
+        return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Paper not found' })).setMimeType(ContentService.MimeType.JSON);
+      }
+      qpSheet.deleteRow(delRow);
+      SpreadsheetApp.flush();
+      return ContentService.createTextOutput(JSON.stringify({ status: 'success', message: 'Question paper deleted.', paperId: paperIdToDel })).setMimeType(ContentService.MimeType.JSON);
+    } catch (errDelPaper) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: errDelPaper.toString() })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+  if (action === 'clearAllTestData') {
+    try {
+      var adminAll = params.adminSecret || '';
+      var storedAll = PropertiesService.getScriptProperties().getProperty('ADMIN_SECRET') || '';
+      if (!adminAll || adminAll !== storedAll) {
+        return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Unauthorized' })).setMimeType(ContentService.MimeType.JSON);
+      }
+      if (!isBulkResetConfirmOk_(params.confirmPhrase)) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'error',
+          message: 'Wrong confirmation. Type: everything (also: delete everything, delete all test data, delete all)'
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      var bulk = { errors: [] };
+      try {
+        bulk.submissions = clearAllSubmissionsSheetAndTrashDrive_().rows;
+      } catch (eSub) {
+        bulk.errors.push('submissions: ' + eSub.toString());
+        bulk.submissions = 0;
+        try {
+          var shSubOnly = getOrCreateTestSubmissionsSheet();
+          var lrSubOnly = shSubOnly.getLastRow();
+          if (lrSubOnly >= 2) {
+            shSubOnly.deleteRows(2, lrSubOnly - 1);
+            bulk.submissions = lrSubOnly - 1;
+          }
+        } catch (eSub2) {
+          bulk.errors.push('submissions sheet-only: ' + eSub2.toString());
+        }
+      }
+      try {
+        var tsSheetAll = getOrCreateTestSessionsSheet();
+        var tsLastAll = tsSheetAll.getLastRow();
+        bulk.testSessions = 0;
+        if (tsLastAll >= 2) {
+          bulk.testSessions = tsLastAll - 1;
+          tsSheetAll.deleteRows(2, tsLastAll - 1);
+        }
+      } catch (eTs) {
+        bulk.errors.push('testSessions: ' + eTs.toString());
+        bulk.testSessions = 0;
+      }
+      try {
+        var resumeSheetAll = getOrCreateResumeCodesSheet();
+        var rcLastAll = resumeSheetAll.getLastRow();
+        bulk.resumeCodes = 0;
+        if (rcLastAll >= 2) {
+          bulk.resumeCodes = rcLastAll - 1;
+          resumeSheetAll.deleteRows(2, rcLastAll - 1);
+        }
+      } catch (eRc) {
+        bulk.errors.push('resumeCodes: ' + eRc.toString());
+        bulk.resumeCodes = 0;
+      }
+      try {
+        var spSheetAll = getOrCreateTestCodeStudentPasscodesSheet();
+        var spLastAll = spSheetAll.getLastRow();
+        bulk.studentPasscodeRows = 0;
+        if (spLastAll >= 2) {
+          bulk.studentPasscodeRows = spLastAll - 1;
+          spSheetAll.deleteRows(2, spLastAll - 1);
+        }
+      } catch (eSp) {
+        bulk.errors.push('studentPasscodes: ' + eSp.toString());
+        bulk.studentPasscodeRows = 0;
+      }
+      try {
+        var codesSheetAll = getOrCreateTestCodesSheet();
+        var tcLastAll = codesSheetAll.getLastRow();
+        bulk.testCodes = 0;
+        if (tcLastAll >= 2) {
+          bulk.testCodes = tcLastAll - 1;
+          codesSheetAll.deleteRows(2, tcLastAll - 1);
+        }
+      } catch (eTc) {
+        bulk.errors.push('testCodes: ' + eTc.toString());
+        bulk.testCodes = 0;
+      }
+      try {
+        var feedbackSheetAll = getOrCreateFeedbackSheet();
+        var fbLastAll = feedbackSheetAll.getLastRow();
+        bulk.feedbackRows = 0;
+        if (fbLastAll >= 2) {
+          bulk.feedbackRows = fbLastAll - 1;
+          feedbackSheetAll.deleteRows(2, fbLastAll - 1);
+        }
+      } catch (eFb) {
+        bulk.errors.push('feedback: ' + eFb.toString());
+        bulk.feedbackRows = 0;
+      }
+      bulk.driveRoots = {};
+      try {
+        bulk.driveRoots.onlineTestUploads = trashAllImmediateChildrenOfFolder_(getOrCreateOnlineTestUploadsRootFolder());
+      } catch (eO) {
+        bulk.driveRoots.onlineTestUploadsError = eO.toString();
+      }
+      try {
+        bulk.driveRoots.legacyZipSubmissions = trashAllImmediateChildrenOfFolder_(getOrCreateTestSubmissionsFolder());
+      } catch (eL) {
+        bulk.driveRoots.legacyZipSubmissionsError = eL.toString();
+      }
+      try {
+        bulk.driveRoots.testFeedback = trashAllImmediateChildrenOfFolder_(getOrCreateTestFeedbackFolder());
+      } catch (eF) {
+        bulk.driveRoots.testFeedbackError = eF.toString();
+      }
+      SpreadsheetApp.flush();
+      var okMsg =
+        'Bulk reset complete. Test codes, sessions, submissions, and feedback rows cleared; Drive roots emptied (trash). Question papers were not deleted.';
+      if (bulk.errors.length) {
+        okMsg += ' Some spreadsheet steps had errors (other steps still ran): ' + bulk.errors.join(' | ');
+      }
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        message: okMsg,
+        removed: bulk
+      })).setMimeType(ContentService.MimeType.JSON);
+    } catch (errAll) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: errAll.toString() })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+  if (action === 'clearTestCodeData') {
+    try {
+      var adminClear = params.adminSecret || '';
+      var storedClear = PropertiesService.getScriptProperties().getProperty('ADMIN_SECRET') || '';
+      if (!adminClear || adminClear !== storedClear) {
+        return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Unauthorized' })).setMimeType(ContentService.MimeType.JSON);
+      }
+      var codeClear = (params.code || '').toString().trim().toUpperCase();
+      if (!codeClear) {
+        return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Code required' })).setMimeType(ContentService.MimeType.JSON);
+      }
+      var scopeRaw = String(params.scope || 'in_progress').trim().toLowerCase();
+      var delDriveRaw = String(params.deleteDrive || params.trashDrive || '').trim().toLowerCase();
+      var trashDriveClear = delDriveRaw === '1' || delDriveRaw === 'yes' || delDriveRaw === 'true';
+      var removedClear = { inProgressSessions: 0, sessionRows: 0, submissions: 0, resumeCodes: 0, driveTrashed: trashDriveClear };
+      if (scopeRaw === 'all') {
+        removedClear.submissions = deleteSubmissionsForTestCode_(codeClear, trashDriveClear);
+        removedClear.sessionRows = deleteTestSessionsForCode_(codeClear, false);
+        removedClear.resumeCodes = deleteResumeCodesForPrimary_(codeClear);
+      } else if (scopeRaw === 'in_progress') {
+        removedClear.inProgressSessions = deleteTestSessionsForCode_(codeClear, true);
+      } else if (scopeRaw === 'session_rows' || scopeRaw === 'sessions') {
+        removedClear.sessionRows = deleteTestSessionsForCode_(codeClear, false);
+      } else if (scopeRaw === 'submissions') {
+        removedClear.submissions = deleteSubmissionsForTestCode_(codeClear, trashDriveClear);
+      } else if (scopeRaw === 'resume_codes' || scopeRaw === 'resumecodes') {
+        removedClear.resumeCodes = deleteResumeCodesForPrimary_(codeClear);
+      } else {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'error',
+          message: 'Unknown scope. Use in_progress, session_rows, submissions, resume_codes, or all'
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      SpreadsheetApp.flush();
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        message: 'Data cleared for test code ' + codeClear + (trashDriveClear ? ' (linked Drive items moved to trash)' : ''),
+        removed: removedClear
+      })).setMimeType(ContentService.MimeType.JSON);
+    } catch (errClear) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: errClear.toString() })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+  if (action === 'deleteStudentSession') {
+    try {
+      var adminSess = params.adminSecret || '';
+      var storedSess = PropertiesService.getScriptProperties().getProperty('ADMIN_SECRET') || '';
+      if (!adminSess || adminSess !== storedSess) {
+        return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Unauthorized' })).setMimeType(ContentService.MimeType.JSON);
+      }
+      var codeSess = (params.code || '').toString().trim().toUpperCase();
+      var emailSess = (params.email || '').toString().trim();
+      if (!codeSess || !emailSess) {
+        return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'code and email required' })).setMimeType(ContentService.MimeType.JSON);
+      }
+      var nSess = deleteTestSessionsForCodeAndEmail_(codeSess, emailSess);
+      SpreadsheetApp.flush();
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        message: nSess ? 'Removed ' + nSess + ' session row(s).' : 'No matching session row found.',
+        removed: nSess
+      })).setMimeType(ContentService.MimeType.JSON);
+    } catch (errSess) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: errSess.toString() })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+  if (action === 'deleteStudentSubmission') {
+    try {
+      var adminSub = params.adminSecret || '';
+      var storedSub = PropertiesService.getScriptProperties().getProperty('ADMIN_SECRET') || '';
+      if (!adminSub || adminSub !== storedSub) {
+        return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Unauthorized' })).setMimeType(ContentService.MimeType.JSON);
+      }
+      var codeSub = (params.code || '').toString().trim().toUpperCase();
+      var emailSub = (params.email || '').toString().trim();
+      if (!codeSub || !emailSub) {
+        return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'code and email required' })).setMimeType(ContentService.MimeType.JSON);
+      }
+      var tsSub = params.timestamp != null ? String(params.timestamp) : '';
+      var nSub = deleteSubmissionsForCodeEmailTimestamp_(codeSub, emailSub, tsSub);
+      SpreadsheetApp.flush();
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        message: nSub ? 'Removed ' + nSub + ' submission row(s).' : 'No matching submission row found.',
+        removed: nSub
+      })).setMimeType(ContentService.MimeType.JSON);
+    } catch (errSub) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: errSub.toString() })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
   return ContentService.createTextOutput(JSON.stringify({
     status: 'success',
-    message: 'Adhyant Registration Form Handler. Use ?action=list|download|generateCode|validateCode|listTestCodes|startTest|setTestCodeActive|listPapers|getPaper|listFeedback|recordTestStart|listTestCodeActivity (ResumeCodes sheet for session codes)'
+    message: 'Adhyant Registration Form Handler. Use ?action=list|download|generateCode|validateCode|listTestCodes|startTest|setTestCodeActive|listPapers|getPaper|servePaperQuestionImage|listFeedback|recordTestStart|abandonTestSession|listTestCodeActivity|deleteQuestionPaper|clearTestCodeData|clearAllTestData|deleteStudentSession|deleteStudentSubmission'
   })).setMimeType(ContentService.MimeType.JSON);
 }
 

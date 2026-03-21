@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react";
-import { getScriptPostUrl, postToAppsScript, getPaperUrl } from "../../utils/scriptApi";
+import { getScriptPostUrl, isScriptPostUrlReady, postToAppsScript, getPaperUrl } from "../../utils/scriptApi";
 import { parsePdfBytesToQuestionsWithImages, setLocalPdfWorker } from "../../utils/pdfExtractQuestionsWithImages";
 import { parseAnswerKeyCsv, buildKeyQuestionsFromCsvRows } from "../../utils/parseAnswerKeyCsv";
 
@@ -141,8 +141,10 @@ export default function UploadAnswerKeyModal({ isOpen, onClose, onSaved, adminSe
     }
 
     const url = getScriptPostUrl();
-    if (!url || !/^https?:\/\//i.test(url)) {
-      setError("Script URL is not set. Add NEXT_PUBLIC_RECORDING_UPLOAD_URL (or VITE_RECORDING_UPLOAD_URL) in .env.");
+    if (!isScriptPostUrlReady(url)) {
+      setError(
+        "Script URL is not set or not recognized. Add NEXT_PUBLIC_RECORDING_UPLOAD_URL (or VITE_RECORDING_UPLOAD_URL) with your Apps Script /exec URL (must include /macros/s/…/exec). Restart npm run dev after editing .env."
+      );
       return;
     }
 

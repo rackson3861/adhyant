@@ -1,6 +1,6 @@
 {
   "title": "Online Assessment - PCM + IQ",
-  "durationMinutes": 6,
+  "durationMinutes": 120,
   "questions": [
     {
       "id": "q1",

@@ -1,12 +1,14 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import Navbar from "./Pages/Navbar";
 import Footer from "./Pages/Footer";
 import "/src/assets/css/testSubmittedCelebration.css";
 
 /**
- * Full-page state after a test was already submitted for this test + session code pair.
+ * Full-page state after a test was already submitted for this test code + passcode (and/or email).
  */
 export default function TestSubmittedCelebration() {
+  const navigate = useNavigate();
   return (
     <>
       <Navbar />
@@ -19,9 +21,12 @@ export default function TestSubmittedCelebration() {
             </div>
             <p className="test-submitted-kicker">All set</p>
             <h1 className="test-submitted-title">You have successfully submitted the test</h1>
-            <p className="test-submitted-lead">
-              Our experts will reach out to you soon with the next steps. Thank you for taking the time to complete your assessment.
-            </p>
+            <p className="test-submitted-lead">Our team will reach out to you for further steps.</p>
+            <div className="test-submitted-actions">
+              <button type="button" className="test-submitted-home-btn" onClick={() => navigate("/")}>
+                Return to home
+              </button>
+            </div>
             <div className="test-submitted-footnote">
               <span className="test-submitted-dot" />
               If you need anything urgently, contact your test organiser.

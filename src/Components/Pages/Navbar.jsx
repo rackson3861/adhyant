@@ -9,6 +9,9 @@ export default function Navbar() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const onAdminPage = location.pathname === "/admin";
 
+  /** React Router v6: use className callback instead of removed activeClassName. */
+  const navClass = (base) => ({ isActive }) => `${base}${isActive ? " active" : ""}`;
+
   const handleJoinNowClick = () => {
     setIsModalOpen(true);
   };
@@ -38,15 +41,15 @@ export default function Navbar() {
         </button>
         <div className="collapse navbar-collapse" id="navbarCollapse">
           <div className="navbar-nav ms-auto p-4 p-lg-0">
-            <NavLink to="/" className="nav-item nav-link" activeClassName="active">Home</NavLink>
-            <NavLink to="/about" className="nav-item nav-link" activeClassName="active">About</NavLink>
-            <NavLink to="/courses" className="nav-item nav-link" activeClassName="active">Courses</NavLink>
-            <NavLink to="/team" className="nav-item nav-link" activeClassName="active">Our Team</NavLink>
-            <NavLink to="/contact" className="nav-item nav-link" activeClassName="active">Contact</NavLink>
-            <NavLink to="/test" className="nav-item nav-link nav-link-highlight" activeClassName="active">Take Test</NavLink>
-            <NavLink to="/test-form" className="nav-item nav-link nav-link-highlight" activeClassName="active">Upcoming Entrance Exam</NavLink>
+            <NavLink to="/" className={navClass("nav-item nav-link")}>Home</NavLink>
+            <NavLink to="/about" className={navClass("nav-item nav-link")}>About</NavLink>
+            <NavLink to="/courses" className={navClass("nav-item nav-link")}>Courses</NavLink>
+            <NavLink to="/team" className={navClass("nav-item nav-link")}>Our Team</NavLink>
+            <NavLink to="/contact" className={navClass("nav-item nav-link")}>Contact</NavLink>
+            <NavLink to="/test" className={navClass("nav-item nav-link nav-link-highlight")}>Take Test</NavLink>
+            <NavLink to="/test-form" className={navClass("nav-item nav-link nav-link-highlight")}>Upcoming Entrance Exam</NavLink>
             {isAdmin && !onAdminPage && (
-              <NavLink to="/admin" className="nav-item nav-link" activeClassName="active">Admin</NavLink>
+              <NavLink to="/admin" className={navClass("nav-item nav-link")}>Admin</NavLink>
             )}
             <a
               onClick={handleJoinNowClick}

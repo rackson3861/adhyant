@@ -1,5 +1,5 @@
-import React, { useState, useRef } from "react";
-import { getScriptPostUrl, postToAppsScript } from "../../utils/scriptApi";
+import React, { useState, useRef, useEffect } from "react";
+import { getScriptPostUrl, isScriptPostUrlReady, postToAppsScript } from "../../utils/scriptApi";
 import { parsePdfBytesToQuestionsWithImages, dataUrlToBase64, setLocalPdfWorker } from "../../utils/pdfExtractQuestionsWithImages";
 
 export default function UploadQuestionPaperModal({ isOpen, onClose, onSaved, adminSecret, adminEmail }) {
@@ -12,7 +12,17 @@ export default function UploadQuestionPaperModal({ isOpen, onClose, onSaved, adm
   const [saving, setSaving] = useState(false);
   const [imageUploadProgress, setImageUploadProgress] = useState(null);
   const [error, setError] = useState("");
+  const [lightboxSrc, setLightboxSrc] = useState(null);
   const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    if (!lightboxSrc) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") setLightboxSrc(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lightboxSrc]);
 
   async function parseJsonResponse(res) {
     const text = await res.text();
@@ -48,9 +58,8 @@ export default function UploadQuestionPaperModal({ isOpen, onClose, onSaved, adm
         const { questions, paperMeta: meta } = await parsePdfBytesToQuestionsWithImages(typed);
         setParsed(questions);
         setPaperMeta(meta);
-        if (meta?.readTimeMinutes && meta.readTimeMinutes > 0 && meta.readTimeMinutes <= 600) {
-          setDurationMinutes(meta.readTimeMinutes);
-        }
+        // Exam duration defaults to 120mins (2hrs); do not use PDF "read time" as timer — that is metadata only.
+        setDurationMinutes(120);
         if (questions.length === 0) {
           setError("No questions could be parsed. Try a PDF with clear numbering (1. 2.) and options (1)–(4) or (a)–(d).");
         }
@@ -80,8 +89,10 @@ export default function UploadQuestionPaperModal({ isOpen, onClose, onSaved, adm
       return;
     }
     const url = getScriptPostUrl();
-    if (!url || !/^https?:\/\//i.test(url)) {
-      setError("Script URL is not set. Add NEXT_PUBLIC_RECORDING_UPLOAD_URL (or VITE_RECORDING_UPLOAD_URL) in .env.");
+    if (!isScriptPostUrlReady(url)) {
+      setError(
+        "Script URL is not set or not recognized. Add NEXT_PUBLIC_RECORDING_UPLOAD_URL (or VITE_RECORDING_UPLOAD_URL) with your Apps Script /exec URL (must include /macros/s/…/exec). Restart npm run dev after editing .env."
+      );
       return;
     }
     setError("");
@@ -113,23 +124,42 @@ export default function UploadQuestionPaperModal({ isOpen, onClose, onSaved, adm
       parsed.forEach((q, i) => {
         if (dataUrlToBase64(q.questionImage)) imageIndices.push(i);
       });
-      // Each image = 1 round-trip to Apps Script + Drive + Sheet update. Sequential = very slow
-      // (e.g. 80 × ~2–5s). Run a few uploads in parallel (still small enough for quotas).
-      const PARALLEL = 4;
+      // Each image = Apps Script + Drive + sheet update. Process in batches with limited parallelism
+      // (faster than one-by-one) + short pause between batches to reduce Drive quota errors.
+      const IMAGE_BATCH_SIZE = 10;
+      const UPLOAD_CONCURRENCY = 4;
+      const PAUSE_MS_BETWEEN_BATCHES = 600;
       const totalImg = imageIndices.length;
       let completed = 0;
-      let sharedNext = 0;
       let uploadFail = null;
 
-      async function uploadWorker() {
-        while (sharedNext < imageIndices.length && !uploadFail) {
-          const slot = sharedNext++;
-          const i = imageIndices[slot];
+      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+      /** At most `limit` uploads in flight; preserves question index order only per batch scheduling, not completion order. */
+      async function runBatchConcurrent(indices, limit, task) {
+        if (indices.length === 0) return;
+        const n = Math.max(1, Math.min(limit, indices.length));
+        let next = 0;
+        async function slot() {
+          while (!uploadFail) {
+            const k = next++;
+            if (k >= indices.length) return;
+            await task(indices[k]);
+          }
+        }
+        await Promise.all(Array.from({ length: n }, () => slot()));
+      }
+
+      for (let batchStart = 0; batchStart < imageIndices.length; batchStart += IMAGE_BATCH_SIZE) {
+        if (uploadFail) break;
+        const batch = imageIndices.slice(batchStart, batchStart + IMAGE_BATCH_SIZE);
+        await runBatchConcurrent(batch, UPLOAD_CONCURRENCY, async (i) => {
+          if (uploadFail) return;
           const b64 = dataUrlToBase64(parsed[i].questionImage);
           if (!b64) {
             completed += 1;
             setImageUploadProgress({ current: completed, total: totalImg });
-            continue;
+            return;
           }
           try {
             const r2 = await postToAppsScript(url, {
@@ -145,19 +175,20 @@ export default function UploadQuestionPaperModal({ isOpen, onClose, onSaved, adm
                 i,
                 message: data2.message || `Image upload failed for question ${i + 1}. Paper id: ${paperId}.`
               };
-              break;
+              return;
             }
           } catch (e) {
             uploadFail = { i, message: e?.message || "Upload failed" };
-            break;
+            return;
           }
           completed += 1;
           setImageUploadProgress({ current: completed, total: totalImg });
+        });
+        if (uploadFail) break;
+        if (batchStart + IMAGE_BATCH_SIZE < imageIndices.length) {
+          await sleep(PAUSE_MS_BETWEEN_BATCHES);
         }
       }
-
-      const nWorkers = Math.min(PARALLEL, Math.max(1, totalImg));
-      await Promise.all(Array.from({ length: nWorkers }, () => uploadWorker()));
 
       if (uploadFail) {
         setError(uploadFail.message);
@@ -192,6 +223,7 @@ export default function UploadQuestionPaperModal({ isOpen, onClose, onSaved, adm
     setParsed([]);
     setPaperMeta(null);
     setError("");
+    setLightboxSrc(null);
     onClose();
   };
 
@@ -200,6 +232,7 @@ export default function UploadQuestionPaperModal({ isOpen, onClose, onSaved, adm
   const withImages = parsed.filter((q) => q.questionImage).length;
 
   return (
+    <>
     <div className="modal show d-block" style={{ backgroundColor: "rgba(0,0,0,0.5)" }} tabIndex={-1}>
       <div className="modal-dialog modal-lg modal-dialog-scrollable">
         <div className="modal-content">
@@ -209,9 +242,9 @@ export default function UploadQuestionPaperModal({ isOpen, onClose, onSaved, adm
           </div>
           <div className="modal-body">
             <p className="text-muted small">
-              Uses <strong>local pdf.js</strong> only (no CDN). Text and options are parsed; each question is also <strong>cropped from the PDF as a JPEG image</strong> so figures and diagrams show in the online test. Printed instructions are skipped for text; images are taken from exam pages only (
+              Uses <strong>local pdf.js</strong> only (no CDN). Text and options are parsed; each question gets a <strong>vertical crop from the PDF</strong> (question line through option (4)) as a JPEG for the online test. Printed instructions are skipped for text; crops come from exam pages only (
               <code>PART-I</code> / <code>PART-II</code> style blocks). MCQ without parseable options falls back to placeholder choices; use{" "}
-              <code>Answer: 42</code> for integer-type items. Saving: metadata first, then <strong>one request per question image</strong> to Google Apps Script (each uploads to Drive and updates the sheet). Big papers need many round-trips—we run <strong>4 uploads in parallel</strong> to shorten wait; progress shows below.
+              <code>Answer: 42</code> for integer-type items. Saving: metadata first, then <strong>one request per question image</strong> to Google Apps Script (each uploads to Drive and updates the sheet). Images upload in <strong>batches of 10</strong> with up to <strong>4 at a time</strong> per batch, then a short pause before the next batch, to stay fast while limiting Google Drive / quota errors; progress shows below.
             </p>
             {error && <div className="alert alert-danger py-2 small">{error}</div>}
             <div className="mb-3">
@@ -243,7 +276,7 @@ export default function UploadQuestionPaperModal({ isOpen, onClose, onSaved, adm
                   />
                 </div>
                 <div className="mb-3">
-                  <label className="form-label">Test duration (minutes)</label>
+                  <label className="form-label">Test duration (default 2 hours = 120mins)</label>
                   <input
                     type="number"
                     className="form-control"
@@ -252,7 +285,7 @@ export default function UploadQuestionPaperModal({ isOpen, onClose, onSaved, adm
                     value={durationMinutes}
                     onChange={(e) => setDurationMinutes(parseInt(e.target.value, 10) || 120)}
                   />
-                  <p className="form-text small text-muted mb-0">e.g. 120 for a 2-hour paper. Filled from PDF when detected.</p>
+                  <p className="form-text small text-muted mb-0">Stored as minutes (e.g. 120). During the exam, the student timer counts down every second (e.g. 119:59). Filled from PDF when detected.</p>
                 </div>
                 {paperMeta &&
                   (paperMeta.readTimeMinutes ||
@@ -272,30 +305,41 @@ export default function UploadQuestionPaperModal({ isOpen, onClose, onSaved, adm
                     </div>
                   )}
                 <p className="small fw-bold mb-1">
-                  Parsed {parsed.length} question(s) · {withImages} with figure image(s)
+                  Parsed {parsed.length} question(s) · {withImages} with page snapshot image(s). Scroll the list below; click a thumbnail to enlarge.
                 </p>
-                <ul className="list-group list-group-flush small mb-3" style={{ maxHeight: "240px", overflowY: "auto" }}>
-                  {parsed.slice(0, 15).map((q, i) => (
-                    <li key={i} className="list-group-item py-2 d-flex gap-2 align-items-start">
-                      {q.questionImage ? (
-                        <img
-                          src={q.questionImage}
-                          alt=""
-                          className="rounded border flex-shrink-0"
-                          style={{ width: 72, height: 54, objectFit: "cover" }}
-                        />
-                      ) : (
-                        <span className="badge bg-secondary flex-shrink-0" style={{ width: 72, height: 54, lineHeight: "54px" }}>
-                          No img
+                <ul className="list-group list-group-flush small mb-3" style={{ maxHeight: "min(55vh, 420px)", overflowY: "auto" }}>
+                  {parsed.map((q, i) => {
+                    const preview =
+                      (q.question && String(q.question).trim()) ||
+                      (q.paperQuestionNum != null ? `Q${q.paperQuestionNum}` : "") ||
+                      "(no parsed text)";
+                    return (
+                      <li key={i} className="list-group-item py-2 d-flex gap-2 align-items-start">
+                        {q.questionImage ? (
+                          <button
+                            type="button"
+                            className="p-0 border-0 bg-transparent rounded flex-shrink-0"
+                            onClick={() => setLightboxSrc(q.questionImage)}
+                            aria-label={`Enlarge preview for question ${i + 1}`}
+                          >
+                            <img
+                              src={q.questionImage}
+                              alt=""
+                              className="rounded border"
+                              style={{ width: 72, height: 54, objectFit: "cover", cursor: "zoom-in", display: "block" }}
+                            />
+                          </button>
+                        ) : (
+                          <span className="badge bg-secondary flex-shrink-0" style={{ width: 72, height: 54, lineHeight: "54px" }}>
+                            No img
+                          </span>
+                        )}
+                        <span className="text-truncate" style={{ maxWidth: "100%" }} title={preview}>
+                          {i + 1}. [{q.type}] {preview.length > 55 ? `${preview.slice(0, 55)}…` : preview}
                         </span>
-                      )}
-                      <span className="text-truncate" style={{ maxWidth: "100%" }}>
-                        {i + 1}. [{q.type}] {q.question?.slice(0, 55)}
-                        {q.question?.length > 55 ? "…" : ""}
-                      </span>
-                    </li>
-                  ))}
-                  {parsed.length > 15 && <li className="list-group-item py-1 text-muted">… and {parsed.length - 15} more</li>}
+                      </li>
+                    );
+                  })}
                 </ul>
               </>
             )}
@@ -309,5 +353,33 @@ export default function UploadQuestionPaperModal({ isOpen, onClose, onSaved, adm
         </div>
       </div>
     </div>
+    {lightboxSrc ? (
+      <div
+        className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center p-2"
+        style={{ backgroundColor: "rgba(0,0,0,0.9)", zIndex: 1060 }}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Enlarged question image"
+        onClick={() => setLightboxSrc(null)}
+      >
+        <button
+          type="button"
+          className="btn-close btn-close-white position-absolute top-0 end-0 m-3"
+          aria-label="Close preview"
+          onClick={(e) => {
+            e.stopPropagation();
+            setLightboxSrc(null);
+          }}
+        />
+        <img
+          src={lightboxSrc}
+          alt="Enlarged question preview"
+          className="rounded shadow"
+          style={{ maxHeight: "92vh", maxWidth: "96vw", objectFit: "contain" }}
+          onClick={(e) => e.stopPropagation()}
+        />
+      </div>
+    ) : null}
+    </>
   );
 }

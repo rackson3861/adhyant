@@ -1,26 +1,68 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "./Navbar";
 import Footer from "./Footer";
 import {
-  getPaperUrl,
   getScriptPostUrl,
   getRecordTestStartUrl,
+  getAbandonTestSessionUrl,
+  getValidateCodeUrl,
   resolveQuestionImageSrc,
   getDriveThumbnailFallbackUrl,
+  resolveStemImageSrcForOnlineTest,
 } from "../../utils/scriptApi";
-import { countQuestionsBySection } from "../../utils/pdfQuestionParser";
-import { saveTestProgress, loadTestProgress, clearTestProgress } from "../../utils/onlineTestPersistence";
+import { fetchLocalQuestionsPaper } from "../../utils/localQuestionsPaper";
+import {
+  countQuestionsBySection,
+  getSectionPaletteOrderForPaperId,
+  normalizeQuestionSection,
+  paletteSectionDisplay,
+} from "../../utils/pdfQuestionParser";
+import { isMcqAnswerCorrect, isMcqOptionSelected } from "../../utils/mcqChoice";
+import {
+  saveTestProgress,
+  loadTestProgress,
+  clearTestProgress,
+  findLatestTestProgressForPaperAndCode,
+} from "../../utils/onlineTestPersistence";
+import { preloadAllQuestionStemImages } from "../../utils/preloadQuestionImages";
+import { markGatePairSubmittedLocally } from "../../utils/gateSubmittedLocal";
 import {
   STORAGE_KEY_QUESTION_PAPER_ID,
   STORAGE_KEY_TEST_CODE,
-  STORAGE_KEY_SECONDARY_CODE,
+  STORAGE_KEY_GATE_PASSWORD,
   STORAGE_KEY_ALREADY_SUBMITTED,
 } from "../TestCodeGate";
+
+function readGatePasscodeForSession() {
+  try {
+    return (sessionStorage.getItem(STORAGE_KEY_GATE_PASSWORD) || "").trim();
+  } catch {
+    return "";
+  }
+}
 import "/src/assets/css/onlineTest.css";
 import adhyantLogo from "../../assets/img/adhyant-logo.png";
 
 const PHASE = { REGISTRATION: "registration", INSTRUCTIONS: "instructions", PERMISSION: "permission", TEST: "test", RESULT: "result" };
+
+const CLASS_GRADE_OPTIONS = [
+  { value: "", label: "Select class / grade" },
+  ...["6th", "7th", "8th", "9th", "10th", "11th", "12th"].map((label) => ({ value: label, label })),
+  { value: "13th (Dropper)", label: "13th (Dropper)" },
+];
+
+function classGradeSelectOptions(studentClass) {
+  const extra = (studentClass || "").trim();
+  if (extra && !CLASS_GRADE_OPTIONS.some((o) => o.value === extra)) {
+    return [
+      CLASS_GRADE_OPTIONS[0],
+      { value: extra, label: `${extra} (saved)` },
+      ...CLASS_GRADE_OPTIONS.slice(1),
+    ];
+  }
+  return CLASS_GRADE_OPTIONS;
+}
 
 // Minimum video dimensions for face/lighting/phone detection (works with 480x360 reduced capture)
 const MIN_VIDEO_WIDTH = 160;
@@ -49,26 +91,28 @@ function getViewportSize() {
   return typeof window !== "undefined" ? { w: window.innerWidth, h: window.innerHeight } : { w: 0, h: 0 };
 }
 
+/** No client-side scoring; sample stems until /questions/paper.json or bundled JSON loads. */
 const DEFAULT_DATA = {
   title: "Online Assessment - PCM + IQ",
-  durationMinutes: 6,
+  paperId: "",
+  durationMinutes: 120,
   maxMarks: null,
   readTimeMinutes: null,
   paperInstructions: [],
   paperTitleHint: null,
-  /** When false, answers are not released to the client and scores are not computed (answer key uploaded separately). */
-  answerKeyPresent: true,
+  seniorStreamInstructions: null,
+  answerKeyPresent: false,
   questions: [
-    { id: "q1", type: "mcq", question: "The SI unit of force is:", options: ["Joule", "Newton", "Pascal", "Watt"], answer: "Newton" },
-    { id: "q2", type: "integer", question: "How many electrons are in a neutral carbon atom? (Enter a whole number)", answer: 6, min: 0, max: 120 },
-    { id: "q3", type: "mcq", question: "Which of the following is a vector quantity?", options: ["Mass", "Speed", "Velocity", "Temperature"], answer: "Velocity" },
-    { id: "q4", type: "integer", question: "Atomic number of oxygen is ___. (Enter a whole number)", answer: 8, min: 1, max: 118 },
-    { id: "q5", type: "mcq", question: "The chemical formula of water is:", options: ["CO2", "H2O", "NaCl", "O2"], answer: "H2O" },
-    { id: "q6", type: "integer", question: "Number of bones in an adult human body (approximately). Enter the integer.", answer: 206, min: 200, max: 210 },
-    { id: "q7", type: "mcq", question: "Which gas is most abundant in Earth's atmosphere?", options: ["Oxygen", "Carbon dioxide", "Nitrogen", "Argon"], answer: "Nitrogen" },
-    { id: "q8", type: "integer", question: "Valency of carbon is ___. (Enter a whole number)", answer: 4, min: 1, max: 8 },
-    { id: "q9", type: "mcq", question: "Acceleration due to gravity (g) on Earth is approximately:", options: ["8.9 m/s²", "9.8 m/s²", "10.2 m/s²", "11.0 m/s²"], answer: "9.8 m/s²" },
-    { id: "q10", type: "integer", question: "How many planets are there in our Solar System? (Enter a whole number)", answer: 8, min: 7, max: 9 },
+    { id: "q1", type: "mcq", question: "The SI unit of force is:", options: ["Joule", "Newton", "Pascal", "Watt"] },
+    { id: "q2", type: "integer", question: "How many electrons are in a neutral carbon atom? (Enter a whole number)", min: 0, max: 120 },
+    { id: "q3", type: "mcq", question: "Which of the following is a vector quantity?", options: ["Mass", "Speed", "Velocity", "Temperature"] },
+    { id: "q4", type: "integer", question: "Atomic number of oxygen is ___. (Enter a whole number)", min: 1, max: 118 },
+    { id: "q5", type: "mcq", question: "The chemical formula of water is:", options: ["CO2", "H2O", "NaCl", "O2"] },
+    { id: "q6", type: "integer", question: "Number of bones in an adult human body (approximately). Enter the integer.", min: 200, max: 210 },
+    { id: "q7", type: "mcq", question: "Which gas is most abundant in Earth's atmosphere?", options: ["Oxygen", "Carbon dioxide", "Nitrogen", "Argon"] },
+    { id: "q8", type: "integer", question: "Valency of carbon is ___. (Enter a whole number)", min: 1, max: 8 },
+    { id: "q9", type: "mcq", question: "Acceleration due to gravity (g) on Earth is approximately:", options: ["8.9 m/s²", "9.8 m/s²", "10.2 m/s²", "11.0 m/s²"] },
+    { id: "q10", type: "integer", question: "How many planets are there in our Solar System? (Enter a whole number)", min: 7, max: 9 },
   ],
 };
 
@@ -76,77 +120,115 @@ export default function OnlineTest() {
   const navigate = useNavigate();
   const [data, setData] = useState(DEFAULT_DATA);
   useEffect(() => {
-    const paperId = typeof sessionStorage !== "undefined" ? sessionStorage.getItem(STORAGE_KEY_QUESTION_PAPER_ID) : null;
-    if (paperId && getPaperUrl(paperId)) {
-      fetch(getPaperUrl(paperId))
-        .then((r) => r.json())
-        .then((res) => {
-          if (res.status === "success" && res.paper && Array.isArray(res.paper.questions) && res.paper.questions.length > 0) {
-            const p = res.paper;
-            setData({
-              title: p.title || p.name || "Online Assessment",
-              durationMinutes: p.durationMinutes ?? 6,
-              maxMarks: p.maxMarks != null ? Number(p.maxMarks) : null,
-              readTimeMinutes: p.readTimeMinutes != null ? Number(p.readTimeMinutes) : null,
-              paperInstructions: Array.isArray(p.instructions) ? p.instructions : [],
-              paperTitleHint: p.paperTitleHint || null,
-              answerKeyPresent: p.answerKeyPresent === true,
-              questions: p.questions.map((q, i) => ({
-                ...q,
-                id: q.id || "q" + (i + 1),
-                type: q.type === "integer" ? "integer" : "mcq",
-                options: Array.isArray(q.options) ? q.options : [],
-                min: q.min != null ? q.min : 0,
-                max: q.max != null ? q.max : 999,
-                imageUrl: resolveQuestionImageSrc(q) || undefined,
-                imageFileId: q.imageFileId || undefined,
-              }))
-            });
-          } else {
-            loadDefaultQuestions();
+    let cancelled = false;
+    (async () => {
+      const local = await fetchLocalQuestionsPaper();
+      if (cancelled) return;
+      if (local && local.questions.length > 0) {
+        try {
+          if (typeof sessionStorage !== "undefined") {
+            sessionStorage.setItem(STORAGE_KEY_QUESTION_PAPER_ID, local.paperId);
           }
-        })
-        .catch(() => loadDefaultQuestions());
-    } else {
-      loadDefaultQuestions();
-    }
-    function loadDefaultQuestions() {
+        } catch {
+          /* ignore */
+        }
+        setData({
+          title: local.title,
+          paperId: local.paperId || "",
+          durationMinutes: local.durationMinutes,
+          maxMarks: local.maxMarks,
+          readTimeMinutes: local.readTimeMinutes,
+          paperInstructions: local.instructions,
+          paperTitleHint: local.paperTitleHint,
+          seniorStreamInstructions: local.seniorStreamInstructions ?? null,
+          answerKeyPresent: false,
+          questions: local.questions,
+        });
+        return;
+      }
       import("../../data/onlineTestQuestions.json")
         .then((m) => m.default || m)
         .then((loaded) => {
-          if (loaded && Array.isArray(loaded.questions) && loaded.questions.length > 0) {
-            setData({
-              title: loaded.title || "Online Assessment",
-              durationMinutes: loaded.durationMinutes ?? 6,
-              maxMarks: null,
-              readTimeMinutes: null,
-              paperInstructions: [],
-              paperTitleHint: null,
-              answerKeyPresent: loaded.answerKeyPresent !== false,
-              questions: loaded.questions
-            });
+          if (cancelled || !loaded || !Array.isArray(loaded.questions) || loaded.questions.length === 0) return;
+          try {
+            if (typeof sessionStorage !== "undefined") {
+              sessionStorage.setItem(STORAGE_KEY_QUESTION_PAPER_ID, "bundled-sample");
+            }
+          } catch {
+            /* ignore */
           }
+          setData({
+            title: loaded.title || "Online Assessment",
+            paperId: "bundled-sample",
+            durationMinutes: loaded.durationMinutes ?? 120,
+            maxMarks: null,
+            readTimeMinutes: null,
+            paperInstructions: [],
+            paperTitleHint: null,
+            seniorStreamInstructions: null,
+            answerKeyPresent: false,
+            questions: loaded.questions.map((q, i) => ({
+              ...q,
+              id: q.id || `q${i + 1}`,
+              answer: undefined,
+              correctChoice: undefined,
+              needsAnswerKey: undefined,
+            })),
+          });
         })
         .catch(() => {});
-    }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const { title, durationMinutes, questions, maxMarks, readTimeMinutes, paperInstructions, answerKeyPresent } = data;
+  const {
+    title,
+    paperId: activePaperId,
+    durationMinutes,
+    questions,
+    maxMarks,
+    readTimeMinutes,
+    paperInstructions,
+    seniorStreamInstructions,
+    answerKeyPresent,
+  } = data;
 
-  const sectionBreakdown = useMemo(() => countQuestionsBySection(questions), [questions]);
+  const sectionBreakdown = useMemo(
+    () => countQuestionsBySection(questions, activePaperId),
+    [questions, activePaperId]
+  );
   const showSectionBreakdown =
     sectionBreakdown.length > 1 ||
     (sectionBreakdown.length === 1 && sectionBreakdown[0].section !== "General");
   const paletteGroups = useMemo(() => {
-    const groups = [];
+    const keyToGroup = new Map();
+    const order = [];
     questions.forEach((q, i) => {
-      const s = (q.section && String(q.section).trim()) || "General";
-      const last = groups[groups.length - 1];
-      if (!last || last.section !== s) groups.push({ section: s, indices: [] });
-      groups[groups.length - 1].indices.push(i);
+      const raw = (q.section && String(q.section).trim()) || "";
+      const sectionKey = normalizeQuestionSection(raw || "General");
+      const section = paletteSectionDisplay(sectionKey, raw);
+      if (!keyToGroup.has(sectionKey)) {
+        keyToGroup.set(sectionKey, { sectionKey, section, indices: [] });
+        order.push(sectionKey);
+      }
+      keyToGroup.get(sectionKey).indices.push(i);
     });
-    return groups;
-  }, [questions]);
+    const paletteOrderArr = getSectionPaletteOrderForPaperId(activePaperId);
+    const rank = (k) => {
+      const i = paletteOrderArr.indexOf(k);
+      return i >= 0 ? i : 999;
+    };
+    order.sort((a, b) => {
+      const dr = rank(a) - rank(b);
+      if (dr !== 0) return dr;
+      const ga = keyToGroup.get(a);
+      const gb = keyToGroup.get(b);
+      return Math.min(...ga.indices) - Math.min(...gb.indices) || String(a).localeCompare(String(b));
+    });
+    return order.map((k) => keyToGroup.get(k));
+  }, [questions, activePaperId]);
   const showPaletteSections = paletteGroups.length > 1 || (paletteGroups[0] && paletteGroups[0].section !== "General");
   const [phase, setPhase] = useState(PHASE.REGISTRATION);
   const [studentName, setStudentName] = useState("");
@@ -155,6 +237,16 @@ export default function OnlineTest() {
   const [studentClass, setStudentClass] = useState("");
   const [studentAdhar, setStudentAdhar] = useState("");
   const [registrationError, setRegistrationError] = useState("");
+  const [registrationSubmitting, setRegistrationSubmitting] = useState(false);
+  /** Shown on test screen if recordTestStart fails (e.g. exam full). */
+  const [sessionStartError, setSessionStartError] = useState("");
+  const [stemImageLoaded, setStemImageLoaded] = useState(false);
+  /** After preload: question id → blob URL or original URL (read during test from this map first). */
+  const [stemSrcOverrideById, setStemSrcOverrideById] = useState({});
+  const [isPreloadingQuestionAssets, setIsPreloadingQuestionAssets] = useState(false);
+  const [preloadProgress, setPreloadProgress] = useState({ done: 0, total: 0 });
+  const blobUrlsToRevokeRef = useRef([]);
+  const preloadRunIdRef = useRef(0);
   const [answers, setAnswers] = useState({});
   const [currentIndex, setCurrentIndex] = useState(0);
   // Do not sync timeLeft to durationMinutes in an effect — paper JSON loads async and would reset the timer mid-test.
@@ -174,8 +266,8 @@ export default function OnlineTest() {
   const [seenQuestions, setSeenQuestions] = useState(() => new Set());
   const [flaggedQuestions, setFlaggedQuestions] = useState(() => new Set());
   const [timerWarning, setTimerWarning] = useState(null);
-  /** Shown on registration when a saved in-progress session exists for this paper + code */
-  const [resumeOffer, setResumeOffer] = useState(null);
+  /** Bumps after local progress cleared so resume eligibility recalculates from localStorage. */
+  const [resumeTick, setResumeTick] = useState(0);
   /** After "Continue test", show remaining time on instructions before camera */
   const [resumeTimeLeftHint, setResumeTimeLeftHint] = useState(null);
 
@@ -205,35 +297,67 @@ export default function OnlineTest() {
   const phoneInCameraModelRef = useRef(null);
   const lastPhoneFlagRef = useRef(0);
   const recordTestStartSentRef = useRef(false);
-  const lastMultiFaceAlertPermissionRef = useRef(0);
-  const lastMultiFaceAlertTestRef = useRef(0);
   const permissionPrevFaceCountRef = useRef(0);
   const testPhasePrevFaceCountRef = useRef(0);
   /** Consumed once in startRecording to restore timer & start time after resume */
   const resumeForRecordingRef = useRef(null);
   /** Latest values for background autosave during TEST */
   const persistDataRef = useRef({});
+  /** Skip student-details form when resuming saved in-progress test (same browser). */
+  const resumeBootRef = useRef(false);
 
-  useEffect(() => {
-    if (questions.length === 0) {
-      setResumeOffer(null);
-      return;
-    }
-    if (typeof sessionStorage === "undefined") return;
+  const resumeEligibleSeconds = useMemo(() => {
+    if (questions.length === 0 || typeof sessionStorage === "undefined") return 0;
     const paperId = sessionStorage.getItem(STORAGE_KEY_QUESTION_PAPER_ID) || "default";
     const testCode = sessionStorage.getItem(STORAGE_KEY_TEST_CODE) || "";
-    const secondaryCode = sessionStorage.getItem(STORAGE_KEY_SECONDARY_CODE) || "";
-    const snap = loadTestProgress(paperId, testCode, questions.length, secondaryCode);
-    if (snap && snap.timeLeft > 0) {
-      setResumeOffer({ timeLeft: snap.timeLeft, savedAt: snap.savedAt });
-    } else {
-      setResumeOffer(null);
-    }
-  }, [questions.length]);
+    const gatePw = readGatePasscodeForSession();
+    const keyEmail = (studentEmail || "").trim().toLowerCase();
+    const snap = keyEmail
+      ? loadTestProgress(paperId, testCode, questions.length, keyEmail, gatePw)
+      : findLatestTestProgressForPaperAndCode(paperId, testCode, questions.length, gatePw);
+    return snap && snap.timeLeft > 0 ? snap.timeLeft : 0;
+  }, [questions.length, resumeTick, studentEmail]);
 
   const currentQ = questions[currentIndex];
+  const currentSectionPaletteLabel = useMemo(() => {
+    const raw = (currentQ?.section && String(currentQ.section).trim()) || "";
+    if (!raw) return "";
+    const key = normalizeQuestionSection(raw);
+    return paletteSectionDisplay(key, raw);
+  }, [currentQ?.section]);
   const isMcq = currentQ?.type === "mcq";
   const hasQuestions = questions.length > 0;
+
+  const paperIdForQuestionImages =
+    typeof sessionStorage !== "undefined" ? (sessionStorage.getItem(STORAGE_KEY_QUESTION_PAPER_ID) || "").trim() : "";
+  const stemImageSrc = useMemo(() => {
+    if (!currentQ) return "";
+    const override = stemSrcOverrideById[currentQ.id];
+    if (override) return override;
+    return resolveStemImageSrcForOnlineTest(currentQ, paperIdForQuestionImages, currentIndex);
+  }, [currentQ, currentIndex, paperIdForQuestionImages, stemSrcOverrideById]);
+
+  useEffect(() => {
+    if (!stemImageSrc) {
+      setStemImageLoaded(true);
+      return;
+    }
+    setStemImageLoaded(false);
+  }, [stemImageSrc, currentIndex]);
+
+  useEffect(() => {
+    return () => {
+      preloadRunIdRef.current += 1;
+      blobUrlsToRevokeRef.current.forEach((u) => {
+        try {
+          if (u && String(u).startsWith("blob:")) URL.revokeObjectURL(u);
+        } catch {
+          /* ignore */
+        }
+      });
+      blobUrlsToRevokeRef.current = [];
+    };
+  }, []);
 
   const setAnswer = (questionId, value) => {
     setAnswers((prev) => ({ ...prev, [questionId]: value }));
@@ -252,10 +376,13 @@ export default function OnlineTest() {
   };
   const isCorrect = (q) => {
     if (!hasGradedKey(q)) return false;
-    const raw = answers[q.id];
-    const normalized = normalizeAnswer(q, raw);
-    if (q.type === "integer") return normalized === q.answer;
-    return String(raw).trim() === String(q.answer).trim();
+    if (q.type === "integer") {
+      const raw = answers[q.id];
+      const normalized = normalizeAnswer(q, raw);
+      return normalized === q.answer;
+    }
+    if (q.type === "mcq") return isMcqAnswerCorrect(answers, q);
+    return false;
   };
   const canComputeScore = answerKeyPresent === true;
   const gradedQuestions = canComputeScore ? questions.filter(hasGradedKey) : [];
@@ -370,11 +497,6 @@ export default function OnlineTest() {
                 permissionPhase: true,
               });
             }
-            const now = Date.now();
-            if (now - lastMultiFaceAlertPermissionRef.current > 6000) {
-              lastMultiFaceAlertPermissionRef.current = now;
-              window.alert("Two or more faces detected. Only one person is allowed to take the test.");
-            }
           } else if (n === 1) {
             setFaceDetected(true);
             drawFaceOverlay(predictions);
@@ -422,10 +544,42 @@ export default function OnlineTest() {
     };
   }, [phase]);
 
-  const startRecording = useCallback(() => {
+  const startRecording = useCallback(async () => {
     if (!streamRef.current) return;
     const resume = resumeForRecordingRef.current;
     resumeForRecordingRef.current = null;
+
+    const runId = ++preloadRunIdRef.current;
+    setIsPreloadingQuestionAssets(true);
+    const figureTotal = questions.reduce((n, q, idx) => {
+      return n + (resolveStemImageSrcForOnlineTest(q, paperIdForQuestionImages, idx) ? 1 : 0);
+    }, 0);
+    setPreloadProgress({ done: 0, total: figureTotal });
+    try {
+      const { idToSrc, blobUrlsToRevoke } = await preloadAllQuestionStemImages(
+        questions,
+        paperIdForQuestionImages,
+        (done, total) => {
+          if (preloadRunIdRef.current === runId) setPreloadProgress({ done, total });
+        }
+      );
+      if (preloadRunIdRef.current !== runId) return;
+      blobUrlsToRevokeRef.current.forEach((u) => {
+        try {
+          if (u && String(u).startsWith("blob:")) URL.revokeObjectURL(u);
+        } catch {
+          /* ignore */
+        }
+      });
+      blobUrlsToRevokeRef.current = blobUrlsToRevoke;
+      setStemSrcOverrideById(idToSrc);
+    } catch (err) {
+      console.warn("Preload question images failed, continuing with network URLs:", err);
+      if (preloadRunIdRef.current === runId) setStemSrcOverrideById({});
+    } finally {
+      if (preloadRunIdRef.current === runId) setIsPreloadingQuestionAssets(false);
+    }
+    if (preloadRunIdRef.current !== runId) return;
 
     chunksRef.current = [];
     // Target ~100 MB per hour: 100*8*1024*1024/3600 ≈ 233 kbps total → video 180 + audio 48
@@ -478,17 +632,44 @@ export default function OnlineTest() {
     }
 
     setPhase(PHASE.TEST);
-  }, [durationMinutes]);
+  }, [durationMinutes, questions, paperIdForQuestionImages]);
 
   useEffect(() => {
-    if (phase !== PHASE.TEST) return;
+    if (phase !== PHASE.TEST) {
+      setSessionStartError("");
+      return;
+    }
     if (!recordTestStartSentRef.current) {
       recordTestStartSentRef.current = true;
       const code = typeof sessionStorage !== "undefined" ? sessionStorage.getItem(STORAGE_KEY_TEST_CODE) : null;
-      const sec = typeof sessionStorage !== "undefined" ? sessionStorage.getItem(STORAGE_KEY_SECONDARY_CODE) || "" : "";
+      const sec = (studentEmail || "").trim().toLowerCase();
+      const gatePc = readGatePasscodeForSession();
       if (code) {
-        const url = getRecordTestStartUrl(code, studentEmail || "", studentName || "", sec, studentClass || "");
-        if (url) fetch(url).catch(() => {});
+        const url = getRecordTestStartUrl(
+          code,
+          studentEmail || "",
+          studentName || "",
+          sec,
+          studentClass || "",
+          gatePc,
+          gatePc
+        );
+        if (url) {
+          fetch(url)
+            .then((r) => r.json())
+            .then((data) => {
+              if (data && data.status !== "success") {
+                setSessionStartError(
+                  typeof data.message === "string" && data.message.trim()
+                    ? data.message
+                    : "Could not start your session on the server. Contact the organiser if this continues."
+                );
+              }
+            })
+            .catch(() => {
+              setSessionStartError("Network error while starting your session. Check your connection.");
+            });
+        }
       }
     }
   }, [phase, studentEmail, studentName, studentClass]);
@@ -543,14 +724,16 @@ export default function OnlineTest() {
     const paperId =
       typeof sessionStorage !== "undefined" ? sessionStorage.getItem(STORAGE_KEY_QUESTION_PAPER_ID) || "default" : "default";
     const testCode = typeof sessionStorage !== "undefined" ? sessionStorage.getItem(STORAGE_KEY_TEST_CODE) || "" : "";
-    const secondaryCode = typeof sessionStorage !== "undefined" ? sessionStorage.getItem(STORAGE_KEY_SECONDARY_CODE) || "" : "";
-
     const persist = () => {
       const d = persistDataRef.current;
       if (!d.questionCount) return;
+      const secondaryCode = (d.studentEmail || "").trim().toLowerCase();
+      const gatePw =
+        typeof sessionStorage !== "undefined" ? (sessionStorage.getItem(STORAGE_KEY_GATE_PASSWORD) || "").trim() : "";
       saveTestProgress({
         paperId,
         testCode,
+        gatePasscode: gatePw,
         secondaryCode,
         timeLeft: d.timeLeft,
         durationMinutes: d.durationMinutes,
@@ -562,6 +745,7 @@ export default function OnlineTest() {
         studentPhone: d.studentPhone,
         studentClass: d.studentClass,
         studentAdhar: d.studentAdhar,
+        studentResumePassword: "",
         questionTimesSeconds: questionTimesRef.current.slice(),
         testStartedAt: testStartTimeRef.current,
         seenIndices: d.seenIndices,
@@ -668,11 +852,6 @@ export default function OnlineTest() {
                 timestamp: new Date().toISOString(),
               });
             }
-            const nowTf = Date.now();
-            if (nowTf - lastMultiFaceAlertTestRef.current > 8000) {
-              lastMultiFaceAlertTestRef.current = nowTf;
-              window.alert("Two or more faces detected. Only one person is allowed to take the test.");
-            }
           } else if (n === 1) {
             noFaceCountRef.current = 0;
           } else {
@@ -770,11 +949,16 @@ export default function OnlineTest() {
     if (typeof sessionStorage !== "undefined") {
       const paperId = sessionStorage.getItem(STORAGE_KEY_QUESTION_PAPER_ID) || "default";
       const testCode = sessionStorage.getItem(STORAGE_KEY_TEST_CODE) || "";
-      const secondaryCode = sessionStorage.getItem(STORAGE_KEY_SECONDARY_CODE) || "";
-      clearTestProgress(paperId, testCode, secondaryCode);
+      const secondaryCode = (studentEmail || "").trim().toLowerCase();
+      const gatePw = readGatePasscodeForSession();
+      clearTestProgress(paperId, testCode, secondaryCode, gatePw);
       sessionStorage.setItem(STORAGE_KEY_ALREADY_SUBMITTED, "1");
+      const gp = readGatePasscodeForSession();
+      if (testCode && gp) {
+        markGatePairSubmittedLocally(testCode, gp);
+      }
     }
-    setResumeOffer(null);
+    setResumeTick((t) => t + 1);
     if (questionStartTimeRef.current != null && currentIndex >= 0 && currentIndex < questions.length) {
       const elapsed = (Date.now() - questionStartTimeRef.current) / 1000;
       const times = questionTimesRef.current;
@@ -785,16 +969,62 @@ export default function OnlineTest() {
     }
     setPhase(PHASE.RESULT);
     setRecording(null);
-  }, [currentIndex, questions.length]);
+  }, [currentIndex, questions.length, studentEmail]);
 
   const savedOnceRef = useRef(false);
+  const redirectedAfterSubmitRef = useRef(false);
+
+  /**
+   * After student submits feedback: when upload has finished (or there was no recording), go home and clear gate session.
+   * Do not redirect before feedback — students must see success copy and submit experience feedback first.
+   */
+  useEffect(() => {
+    if (phase !== PHASE.RESULT) return;
+    if (!feedbackSubmitted) return;
+    if (redirectedAfterSubmitRef.current) return;
+    const clearSessionAndGoHome = () => {
+      if (redirectedAfterSubmitRef.current) return;
+      redirectedAfterSubmitRef.current = true;
+      try {
+        if (typeof sessionStorage !== "undefined") {
+          sessionStorage.removeItem(STORAGE_KEY_TEST_CODE);
+          sessionStorage.removeItem(STORAGE_KEY_GATE_PASSWORD);
+          sessionStorage.removeItem(STORAGE_KEY_QUESTION_PAPER_ID);
+          sessionStorage.removeItem(STORAGE_KEY_ALREADY_SUBMITTED);
+        }
+      } catch {
+        /* ignore */
+      }
+      navigate("/");
+    };
+    if (!recordedBlob) {
+      clearSessionAndGoHome();
+      return;
+    }
+    if (uploadStatus === null || uploadStatus === "uploading") return;
+    if (
+      uploadStatus === "uploaded" ||
+      uploadStatus === "local_only" ||
+      uploadStatus === "upload_failed" ||
+      uploadStatus === "save_failed"
+    ) {
+      const t = setTimeout(clearSessionAndGoHome, 600);
+      return () => clearTimeout(t);
+    }
+  }, [phase, feedbackSubmitted, recordedBlob, uploadStatus, navigate]);
+
   useEffect(() => {
     if (phase !== PHASE.RESULT || !recordedBlob || savedOnceRef.current) return;
     savedOnceRef.current = true;
     const uploadUrl = import.meta.env.NEXT_PUBLIC_RECORDING_UPLOAD_URL || import.meta.env.VITE_RECORDING_UPLOAD_URL || import.meta.env.VITE_TEST_SUBMISSION_URL;
     const testCode = typeof sessionStorage !== "undefined" ? sessionStorage.getItem(STORAGE_KEY_TEST_CODE) : null;
-    const secondaryCode =
-      typeof sessionStorage !== "undefined" ? sessionStorage.getItem(STORAGE_KEY_SECONDARY_CODE) || "" : "";
+    const questionPaperId =
+      typeof sessionStorage !== "undefined" ? sessionStorage.getItem(STORAGE_KEY_QUESTION_PAPER_ID) || undefined : undefined;
+    const sessionSecondary = (studentEmail || "").trim().toLowerCase();
+    const gatePasscodeMeta = readGatePasscodeForSession();
+    const answersAttemptedCount = questions.filter(
+      (q) => answers[q.id] !== undefined && answers[q.id] !== ""
+    ).length;
     const metadata = {
       studentName: (studentName || "").trim(),
       studentEmail: (studentEmail || "").trim(),
@@ -803,32 +1033,58 @@ export default function OnlineTest() {
       studentAdhar: (studentAdhar || "").trim().replace(/\s/g, ""),
       questionTimesSeconds: questionTimesRef.current,
       isMobile: isMobileRef.current,
+      /** Proctoring / integrity signals (tab blur, copy, resize, face, etc.) */
       events: violationsRef.current,
+      activityEvents: violationsRef.current,
       score: canComputeScore ? score : null,
       gradedQuestionCount: canComputeScore ? gradedQuestionCount : null,
-      answerKeyPresent: canComputeScore,
-      ...(canComputeScore
-        ? {}
-        : { scoreStatus: "answer_key_not_present", scoreMessage: "Can't be Computed. Answer Key Not Present." }),
+      answerKeyPresent: false,
+      scoringMode: "metadata_only",
+      paperSource: "local_questions",
+      questionPaperId,
+      answersAttemptedCount,
       totalQuestions: questions.length,
       durationMinutes,
       submittedAt: new Date().toISOString(),
       testStartedAt: testStartTimeRef.current ? new Date(testStartTimeRef.current).toISOString() : null,
       testCode: testCode || undefined,
-      secondaryCode: secondaryCode || undefined,
+      secondaryCode: sessionSecondary || undefined,
+      gatePasscode: gatePasscodeMeta || undefined,
     };
     const answersByQuestionId = {};
     questions.forEach((q) => {
       const v = answers[q.id];
       if (v !== undefined && v !== "") answersByQuestionId[q.id] = v;
     });
-    const answersDetailed = questions.map((q) => ({
-      questionId: q.id,
-      paperQuestionNum: q.paperQuestionNum ?? null,
-      section: q.section || null,
-      type: q.type,
-      selected: answers[q.id] !== undefined && answers[q.id] !== "" ? answers[q.id] : null,
-    }));
+    const answersDetailed = questions.map((q) => {
+      const sel = answers[q.id] !== undefined && answers[q.id] !== "" ? answers[q.id] : null;
+      let selectedChoice = null;
+      let selectedOptionText = null;
+      if (q.type === "mcq" && sel != null) {
+        const s = String(sel).trim();
+        const opts = Array.isArray(q.options) ? q.options : [];
+        if (/^[1-4]$/.test(s)) {
+          selectedChoice = s;
+          const i = parseInt(s, 10) - 1;
+          if (opts[i] != null) selectedOptionText = String(opts[i]);
+        } else {
+          const i = opts.findIndex((o) => String(o).trim() === s);
+          if (i >= 0) {
+            selectedChoice = String(i + 1);
+            selectedOptionText = String(opts[i]);
+          }
+        }
+      }
+      return {
+        questionId: q.id,
+        paperQuestionNum: q.paperQuestionNum ?? null,
+        section: q.section || null,
+        type: q.type,
+        selected: sel,
+        selectedChoice,
+        selectedOptionText,
+      };
+    });
 
     const runLocalSave = () =>
       import("../../utils/recordingDb")
@@ -859,6 +1115,12 @@ export default function OnlineTest() {
         answersByQuestionId,
         answersDetailed,
         paperTitle: title,
+        testSessionPayload: {
+          answersByQuestionId,
+          answersDetailed,
+          questionTimesSeconds: questionTimesRef.current,
+          activityEvents: violationsRef.current,
+        },
         ...(maxMarks != null && !Number.isNaN(maxMarks) ? { maxMarks } : {}),
         ...(readTimeMinutes != null && !Number.isNaN(readTimeMinutes) ? { readTimeMinutes } : {}),
       };
@@ -899,7 +1161,18 @@ export default function OnlineTest() {
     const runUpload = (zipBlob) => {
       const formData = new FormData();
       formData.append("zip", zipBlob, `test-${metadata.studentName.replace(/\s+/g, "-")}-${Date.now()}.zip`);
-      const zipMeta = { ...metadata, answersByQuestionId, answersDetailed, paperTitle: title };
+      const zipMeta = {
+        ...metadata,
+        answersByQuestionId,
+        answersDetailed,
+        paperTitle: title,
+        testSessionPayload: {
+          answersByQuestionId,
+          answersDetailed,
+          questionTimesSeconds: questionTimesRef.current,
+          activityEvents: violationsRef.current,
+        },
+      };
       formData.append("metadata", JSON.stringify(zipMeta));
       fetch(uploadUrl, { method: "POST", body: formData })
         .then(() => setUploadStatus("uploaded"))
@@ -909,7 +1182,25 @@ export default function OnlineTest() {
       .then(({ default: JSZip }) => {
         const zip = new JSZip();
         zip.file("recording.webm", recordedBlob);
-        zip.file("metadata.json", JSON.stringify({ ...metadata, answersByQuestionId, answersDetailed, paperTitle: title }, null, 2));
+        zip.file(
+          "metadata.json",
+          JSON.stringify(
+            {
+              ...metadata,
+              answersByQuestionId,
+              answersDetailed,
+              paperTitle: title,
+              testSessionPayload: {
+                answersByQuestionId,
+                answersDetailed,
+                questionTimesSeconds: questionTimesRef.current,
+                activityEvents: violationsRef.current,
+              },
+            },
+            null,
+            2
+          )
+        );
         return zip.generateAsync({ type: "blob" });
       })
       .then((zipBlob) => {
@@ -937,31 +1228,49 @@ export default function OnlineTest() {
     answerKeyPresent,
   ]);
 
-  const formatTime = (s) => {
-    const m = Math.floor(s / 60);
+  /** Live countdown for header / resume: m:ss or h:mm:ss */
+  const formatTimeCountdown = (totalSeconds) => {
+    const s = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
     const sec = s % 60;
-    return `${m}:${sec < 10 ? "0" : ""}${sec}`;
+    const pad = (n) => String(n).padStart(2, "0");
+    if (h > 0) return `${h}:${pad(m)}:${pad(sec)}`;
+    return `${m}:${pad(sec)}`;
   };
 
-  const handleDiscardSavedSession = useCallback(() => {
-    if (typeof sessionStorage !== "undefined") {
-      const paperId = sessionStorage.getItem(STORAGE_KEY_QUESTION_PAPER_ID) || "default";
-      const testCode = sessionStorage.getItem(STORAGE_KEY_TEST_CODE) || "";
-      const secondaryCode = sessionStorage.getItem(STORAGE_KEY_SECONDARY_CODE) || "";
-      clearTestProgress(paperId, testCode, secondaryCode);
+  const handleDiscardSavedSession = useCallback(async () => {
+    try {
+      if (typeof sessionStorage !== "undefined") {
+        const paperId = sessionStorage.getItem(STORAGE_KEY_QUESTION_PAPER_ID) || "default";
+        const testCode = sessionStorage.getItem(STORAGE_KEY_TEST_CODE) || "";
+        const emailKey = (studentEmail || "").trim().toLowerCase();
+        const gatePw = readGatePasscodeForSession();
+        clearTestProgress(paperId, testCode, emailKey, gatePw);
+        if (testCode && emailKey) {
+          const url = getAbandonTestSessionUrl(testCode, emailKey);
+          if (url) await fetch(url).then((r) => r.json()).catch(() => {});
+        }
+      }
+    } catch {
+      /* ignore */
     }
-    setResumeOffer(null);
+    resumeBootRef.current = false;
+    setResumeTick((t) => t + 1);
     setResumeTimeLeftHint(null);
-  }, []);
+  }, [studentEmail]);
 
   const handleResumeFromSnapshot = useCallback(() => {
     if (typeof sessionStorage === "undefined" || questions.length === 0) return;
     const paperId = sessionStorage.getItem(STORAGE_KEY_QUESTION_PAPER_ID) || "default";
     const testCode = sessionStorage.getItem(STORAGE_KEY_TEST_CODE) || "";
-    const secondaryCode = sessionStorage.getItem(STORAGE_KEY_SECONDARY_CODE) || "";
-    const snap = loadTestProgress(paperId, testCode, questions.length, secondaryCode);
+    const keyEmail = (studentEmail || "").trim().toLowerCase();
+    const gatePw = readGatePasscodeForSession();
+    let snap = keyEmail
+      ? loadTestProgress(paperId, testCode, questions.length, keyEmail, gatePw)
+      : findLatestTestProgressForPaperAndCode(paperId, testCode, questions.length, gatePw);
     if (!snap || snap.timeLeft <= 0) {
-      setResumeOffer(null);
+      resumeBootRef.current = false;
       return;
     }
     setStudentName(snap.studentName || "");
@@ -986,10 +1295,26 @@ export default function OnlineTest() {
     setSeenQuestions(new Set(Array.isArray(snap.seenIndices) && snap.seenIndices.length ? snap.seenIndices : [idx]));
     setFlaggedQuestions(new Set(Array.isArray(snap.flaggedIndices) ? snap.flaggedIndices : []));
     setResumeTimeLeftHint(snap.timeLeft);
-    setResumeOffer(null);
     setRegistrationError("");
     setPhase(PHASE.INSTRUCTIONS);
-  }, [questions.length]);
+  }, [questions.length, studentEmail]);
+
+  useLayoutEffect(() => {
+    if (phase !== PHASE.REGISTRATION) return;
+    if (!questions.length || resumeEligibleSeconds <= 0) return;
+    if (resumeBootRef.current) return;
+    if (typeof sessionStorage === "undefined") return;
+    const paperId = sessionStorage.getItem(STORAGE_KEY_QUESTION_PAPER_ID) || "default";
+    const testCode = sessionStorage.getItem(STORAGE_KEY_TEST_CODE) || "";
+    const keyEmail = (studentEmail || "").trim().toLowerCase();
+    const gatePw = readGatePasscodeForSession();
+    let snapPre = keyEmail
+      ? loadTestProgress(paperId, testCode, questions.length, keyEmail, gatePw)
+      : findLatestTestProgressForPaperAndCode(paperId, testCode, questions.length, gatePw);
+    if (!snapPre || snapPre.timeLeft <= 0) return;
+    resumeBootRef.current = true;
+    handleResumeFromSnapshot();
+  }, [phase, questions.length, resumeEligibleSeconds, handleResumeFromSnapshot, studentEmail]);
 
   const goToQuestion = (index) => {
     if (index < 0 || index >= questions.length) return;
@@ -1031,7 +1356,7 @@ export default function OnlineTest() {
       return false;
     }
     if (!(studentClass || "").trim()) {
-      setRegistrationError("Please enter your class / grade (e.g. Class 10, XII Science).");
+      setRegistrationError("Please select your class / grade from the list.");
       return false;
     }
     if (!/^\d{12}$/.test(adhar)) {
@@ -1040,6 +1365,41 @@ export default function OnlineTest() {
     }
     setRegistrationError("");
     return true;
+  };
+
+  const handleContinueFromRegistration = async () => {
+    if (!validateRegistration()) return;
+    const code = typeof sessionStorage !== "undefined" ? sessionStorage.getItem(STORAGE_KEY_TEST_CODE) || "" : "";
+    if (!code) {
+      setRegistrationError("Session expired. Open the test again from the menu and enter your test code and gate password.");
+      return;
+    }
+    const gatePw = typeof sessionStorage !== "undefined" ? (sessionStorage.getItem(STORAGE_KEY_GATE_PASSWORD) || "").trim() : "";
+    if (!gatePw) {
+      setRegistrationError("Session expired. Open the test again from the menu and enter your test code and gate password.");
+      return;
+    }
+    const url = getValidateCodeUrl(code, gatePw, undefined);
+    if (!url) {
+      setPhase(PHASE.INSTRUCTIONS);
+      return;
+    }
+    setRegistrationSubmitting(true);
+    setRegistrationError("");
+    try {
+      const r = await fetch(url);
+      const data = await r.json();
+      if (data.status === "success" && data.valid === true && data.alreadySubmitted === true) {
+        sessionStorage.setItem(STORAGE_KEY_ALREADY_SUBMITTED, "1");
+        window.location.reload();
+        return;
+      }
+      setPhase(PHASE.INSTRUCTIONS);
+    } catch {
+      setRegistrationError("Could not verify your attempt. Check your connection and try again.");
+    } finally {
+      setRegistrationSubmitting(false);
+    }
   };
 
   if (phase === PHASE.REGISTRATION) {
@@ -1060,22 +1420,13 @@ export default function OnlineTest() {
                   <h2 className="online-test-reg-heading">Student details</h2>
                   <p className="online-test-reg-desc">Fill in your details before starting the test.</p>
                 </div>
-                {resumeOffer && (
-                  <div className="online-test-resume-banner" role="status">
-                    <p className="online-test-resume-banner-text">
-                      You have an unfinished attempt for this test.{" "}
-                      <strong>{formatTime(resumeOffer.timeLeft)}</strong> left on the timer — you can continue where you left off.
-                    </p>
-                    <div className="online-test-resume-banner-actions">
-                      <button type="button" className="online-test-reg-btn online-test-resume-continue" onClick={handleResumeFromSnapshot}>
-                        Continue test
-                      </button>
-                      <button type="button" className="online-test-resume-discard" onClick={handleDiscardSavedSession}>
-                        Start over
-                      </button>
-                    </div>
-                  </div>
-                )}
+                <p className="text-muted small mb-3">
+                  Use the <strong>same email</strong> as before on this device to restore saved progress. At the gate, use your <strong>test code</strong> and the <strong>same passcode</strong> you saved when you entered (or the organiser&apos;s instructions for older tests). To discard progress, use{" "}
+                  <button type="button" className="btn btn-link btn-sm p-0 align-baseline" onClick={() => void handleDiscardSavedSession()}>
+                    Start over (clears saved progress)
+                  </button>
+                  .
+                </p>
                 {registrationError && <div className="online-test-reg-error">{registrationError}</div>}
                 <div className="online-test-reg-form">
                   <div className="online-test-reg-field">
@@ -1111,14 +1462,18 @@ export default function OnlineTest() {
                   </div>
                   <div className="online-test-reg-field">
                     <label className="online-test-reg-label">Class / grade</label>
-                    <input
-                      type="text"
+                    <select
                       className="online-test-reg-input"
-                      placeholder="e.g. Class 10, XII Science, 9th"
                       value={studentClass}
                       onChange={(e) => setStudentClass(e.target.value)}
-                      maxLength={80}
-                    />
+                      aria-label="Class or grade"
+                    >
+                      {classGradeSelectOptions(studentClass).map((o) => (
+                        <option key={o.value || "placeholder"} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="online-test-reg-field">
                     <label className="online-test-reg-label">Aadhaar number (12 digits)</label>
@@ -1135,11 +1490,10 @@ export default function OnlineTest() {
                 <button
                   type="button"
                   className="online-test-reg-btn"
-                  onClick={() => {
-                    if (validateRegistration()) setPhase(PHASE.INSTRUCTIONS);
-                  }}
+                  disabled={registrationSubmitting}
+                  onClick={() => void handleContinueFromRegistration()}
                 >
-                  Continue to instructions →
+                  {registrationSubmitting ? "Checking…" : "Continue to instructions →"}
                 </button>
               </div>
             </div>
@@ -1163,8 +1517,8 @@ export default function OnlineTest() {
                 {maxMarks != null && !Number.isNaN(maxMarks) ? ` · ${maxMarks} marks` : ""}
                 {" · "}
                 {readTimeMinutes != null && readTimeMinutes > 0 && readTimeMinutes !== durationMinutes
-                  ? `${durationMinutes} min for this online session`
-                  : `${durationMinutes} min`}
+                  ? `${durationMinutes} minutes for this online session`
+                  : `${durationMinutes} minutes`}
               </p>
             </div>
           </div>
@@ -1183,7 +1537,7 @@ export default function OnlineTest() {
                 <div className="online-test-instructions-body">
                   {resumeTimeLeftHint != null && resumeTimeLeftHint > 0 && (
                     <div className="online-test-resume-instr-hint" role="status">
-                      Resuming your session — <strong>{formatTime(resumeTimeLeftHint)}</strong> left on the timer. Enable camera and microphone below to continue.
+                      Resuming your session — <strong>{formatTimeCountdown(resumeTimeLeftHint)}</strong> left on the timer. Enable camera and microphone below to continue.
                     </div>
                   )}
                   <div className="online-test-instr-logo-wrap">
@@ -1255,6 +1609,19 @@ export default function OnlineTest() {
                         </ul>
                       </li>
                     )}
+                    {seniorStreamInstructions && (
+                      <li className="online-test-instr-stream-li">
+                        <div className="online-test-instr-stream-callout" role="region" aria-label="Stream attempt rules">
+                          <p className="online-test-instr-stream-title">{seniorStreamInstructions.heading}</p>
+                          {seniorStreamInstructions.lines.map((row, idx) => (
+                            <p key={idx} className="online-test-instr-stream-line">
+                              <strong className="online-test-instr-stream-label">{row.label}:</strong>{" "}
+                              <span className="online-test-instr-stream-text">{row.text}</span>
+                            </p>
+                          ))}
+                        </div>
+                      </li>
+                    )}
                     {paperInstructions.length > 0 && (
                       <li className="online-test-instr-sections">
                         <strong>From the question paper (online-relevant):</strong>
@@ -1265,10 +1632,21 @@ export default function OnlineTest() {
                         </ul>
                       </li>
                     )}
-                    <li>Options match the paper: choices are labelled <strong>(1)</strong> through <strong>(4)</strong> where applicable.</li>
+                    <li>
+                      For multiple choice, tap <strong>1</strong>, <strong>2</strong>, <strong>3</strong>, or <strong>4</strong>; your response is saved as that choice (question text and any figure above count as one question).
+                    </li>
                     <li>You need to allow <strong>camera and microphone</strong>. Recording starts when you click &quot;Start Test&quot;.</li>
+                    <li>
+                      You can use a <strong>phone or tablet</strong>—prefer stable <strong>Wi‑Fi</strong>, good lighting for face detection, and keep the device steady.
+                      On iPhone, choose <strong>Allow</strong> when the browser asks for camera/microphone.
+                    </li>
                     <li>Stay on this test window; switching away may be logged (see warning above).</li>
-                    <li>Answer all questions. Use the question palette (grouped by section) to jump between questions.</li>
+                    <li>
+                      Use the <strong>question palette</strong> (grouped by section) to jump between questions.
+                    </li>
+                    <li>
+                      If you are logged out or continue on another device, use the same <strong>test code</strong> and <strong>passcode</strong> you saved at the entry screen. Use the same <strong>email</strong> on this browser if you want to restore saved progress.
+                    </li>
                   </ul>
                   <button type="button" className="online-test-reg-btn online-test-instr-btn" onClick={startMedia}>
                     I agree, Start Test
@@ -1301,12 +1679,12 @@ export default function OnlineTest() {
             )}
             <div className="online-test-permission-grid">
               <div className="online-test-permission-card online-test-permission-card-steps">
-                <h2 className="online-test-permission-title">🎥 Camera &amp; microphone</h2>
+                <h2 className="online-test-permission-title">🎥 Camera & microphone</h2>
                 <p className="online-test-permission-desc">Your video and audio will be recorded. Ensure your face is clearly visible and lighting is good.</p>
                 <button
                   type="button"
                   className="online-test-reg-btn online-test-permission-btn"
-                  disabled={!faceDetected || !lightingOk}
+                  disabled={!faceDetected || !lightingOk || isPreloadingQuestionAssets}
                   onClick={() => {
                     if (!faceDetected || !lightingOk) {
                       if (!faceDetected && !lightingOk) {
@@ -1318,10 +1696,10 @@ export default function OnlineTest() {
                       }
                       return;
                     }
-                    startRecording();
+                    void startRecording();
                   }}
                 >
-                  Start recording &amp; begin test
+                  {isPreloadingQuestionAssets ? "Loading questions…" : "Start recording & begin test"}
                 </button>
                 {(!faceDetected || !lightingOk) && detectionReady && (
                   <p className="online-test-permission-hint">Button enabled when face is detected and lighting is good.</p>
@@ -1354,6 +1732,22 @@ export default function OnlineTest() {
               </div>
             </div>
           </div>
+          {isPreloadingQuestionAssets ? (
+            <div className="online-test-preload-overlay" role="status" aria-live="polite" aria-busy="true">
+              <div className="online-test-preload-card">
+                <div className="online-test-preload-spinner" aria-hidden />
+                <p className="online-test-preload-title">Loading all question images</p>
+                <p className="online-test-preload-sub">
+                  {preloadProgress.total > 0
+                    ? `Cached locally: ${preloadProgress.done} / ${preloadProgress.total} figure(s). Please wait…`
+                    : "Preparing figures from your question paper…"}
+                </p>
+                <p className="online-test-preload-hint text-muted small mb-0">
+                  The timer starts only after this step finishes. Images are then shown from memory for a smoother test.
+                </p>
+              </div>
+            </div>
+          ) : null}
         </div>
         <Footer />
       </>
@@ -1366,6 +1760,11 @@ export default function OnlineTest() {
         <Navbar />
         <div className="online-test-wrapper online-test-phase-test online-test-no-copy" onContextMenu={(e) => e.preventDefault()}>
           <div className="container py-4">
+            {sessionStartError ? (
+              <div className="alert alert-warning small mb-3" role="status">
+                {sessionStartError}
+              </div>
+            ) : null}
             {timerWarning && (
               <div className="online-test-timer-warning-overlay" role="dialog" aria-modal="true" aria-labelledby="timer-warning-title">
                 <div className="online-test-timer-warning-card">
@@ -1373,8 +1772,8 @@ export default function OnlineTest() {
                   <h2 id="timer-warning-title" className="online-test-timer-warning-title">Time warning</h2>
                   <p className="online-test-timer-warning-message">
                     {timerWarning === "5min"
-                      ? "5 minutes left. Please complete your answers and submit the test."
-                      : "1 minute left. Submit your test now if you have not already."}
+                      ? "5mins left. Please complete your answers and submit the test."
+                      : "1min left. Submit your test now if you have not already."}
                   </p>
                   <button type="button" className="btn btn-primary online-test-timer-warning-btn" onClick={() => setTimerWarning(null)}>
                     OK
@@ -1389,9 +1788,9 @@ export default function OnlineTest() {
                 <span
                   className={`online-test-timer ${timeLeft <= 60 ? "online-test-timer-red" : timeLeft <= 300 ? "online-test-timer-orange" : ""}`}
                 >
-                  ⏱ Time left: {formatTime(timeLeft)}
+                  ⏱ Time left: {formatTimeCountdown(timeLeft)}
                 </span>
-                <span className="online-test-meta-text">Recording · Face &amp; activity monitored</span>
+                <span className="online-test-meta-text">Recording · Face & activity monitored</span>
                 <span className="online-test-env-badge">
                   {isMobileRef.current ? "Mobile" : "Desktop"}
                 </span>
@@ -1405,45 +1804,87 @@ export default function OnlineTest() {
                     <div className="online-test-question-head">
                       <h2 className="online-test-question-num">Question No. {currentIndex + 1}</h2>
                       <p className="online-test-question-meta">Question {currentIndex + 1} of {questions.length}</p>
-                      {currentQ.section && (
-                        <p className="online-test-question-section" title={currentQ.section}>{currentQ.section}</p>
+                      {currentSectionPaletteLabel && (
+                        <p className="online-test-question-section" title={currentSectionPaletteLabel}>
+                          {currentSectionPaletteLabel}
+                        </p>
                       )}
                     </div>
-                    <h2 className="online-test-question-text">{currentQ.question}</h2>
-                    {(currentQ.imageUrl || currentQ.questionImage) && (
-                      <div className="online-test-question-image-wrap mb-3">
-                        <img
-                          src={currentQ.imageUrl || currentQ.questionImage}
-                          alt="Question figure"
-                          className="online-test-question-image"
-                          loading="lazy"
-                          referrerPolicy="no-referrer"
-                          onError={(ev) => {
-                            const el = ev.currentTarget;
-                            const fid = currentQ.imageFileId;
-                            if (fid && el.dataset.imgFallback !== "thumb") {
-                              el.dataset.imgFallback = "thumb";
-                              el.src = getDriveThumbnailFallbackUrl(fid);
-                            }
-                          }}
-                        />
-                      </div>
-                    )}
+                    <div className="online-test-question-stem-block">
+                      {String(currentQ.question || "").trim() ? (
+                        <h2 className="online-test-question-text">{currentQ.question}</h2>
+                      ) : null}
+                      {stemImageSrc ? (
+                        <div
+                          className={`online-test-question-image-wrap mb-0${stemImageLoaded ? " online-test-question-image-wrap--loaded" : ""}`}
+                        >
+                          {!stemImageLoaded ? (
+                            <div className="online-test-question-image-skeleton" role="status" aria-label="Loading question image" />
+                          ) : null}
+                          <img
+                            key={`qfig-${currentIndex}-${currentQ.id}`}
+                            src={stemImageSrc}
+                            alt="Question figure — part of this question"
+                            className="online-test-question-image"
+                            loading="eager"
+                            decoding="async"
+                            fetchPriority="high"
+                            onLoad={() => setStemImageLoaded(true)}
+                            onError={(ev) => {
+                              const el = ev.currentTarget;
+                              const fid = currentQ.imageFileId;
+                              if (fid && el.dataset.imgFallback !== "thumb") {
+                                el.dataset.imgFallback = "thumb";
+                                el.src = getDriveThumbnailFallbackUrl(fid);
+                                return;
+                              }
+                              if (fid && el.dataset.imgFallback !== "fullthumb") {
+                                el.dataset.imgFallback = "fullthumb";
+                                el.src = resolveQuestionImageSrc({ imageFileId: fid });
+                                return;
+                              }
+                              setStemImageLoaded(true);
+                            }}
+                          />
+                        </div>
+                      ) : null}
+                    </div>
 
                     {isMcq ? (
-                      <div className="online-test-options">
-                        {currentQ.options.map((opt, i) => (
-                          <button
-                            key={i}
-                            type="button"
-                            className={`btn btn-outline-primary w-100 text-start mb-2 online-test-opt-btn ${String(answers[currentQ.id]) === String(opt) ? "active" : ""}`}
-                            onClick={() => setAnswer(currentQ.id, opt)}
-                          >
-                            <span className="online-test-opt-label">({i + 1})</span>
-                            <span className="online-test-opt-text">{opt}</span>
-                          </button>
-                        ))}
-                      </div>
+                      <>
+                        <p className="online-test-options-prompt small text-muted mb-2">Select your answer: <strong>1</strong>, <strong>2</strong>, <strong>3</strong>, or <strong>4</strong></p>
+                        <div
+                          className={`online-test-options${currentQ.options.length === 4 && currentQ.options.every((o, j) => String(o).trim() === String(j + 1)) ? " online-test-options--grid-2x2" : ""}`}
+                        >
+                          {currentQ.options.map((opt, i) => {
+                            const onlyDigit =
+                              currentQ.options.length === 4 &&
+                              currentQ.options.every((o, j) => String(o).trim() === String(j + 1));
+                            return (
+                              <button
+                                key={i}
+                                type="button"
+                                className={`online-test-opt-btn ${onlyDigit ? "online-test-opt-btn--digit-only" : "text-start mb-2 w-100"} ${isMcqOptionSelected(answers, currentQ, i) ? "active" : ""}`}
+                                onClick={() => setAnswer(currentQ.id, String(i + 1))}
+                                aria-label={`Choice ${i + 1}`}
+                              >
+                                {onlyDigit ? (
+                                  <span className="online-test-opt-num online-test-opt-num--solo">{i + 1}</span>
+                                ) : (
+                                  <>
+                                    <span className="online-test-opt-num" aria-hidden>
+                                      {i + 1}
+                                    </span>
+                                    <span className="online-test-opt-body">
+                                      <span className="online-test-opt-text">{opt}</span>
+                                    </span>
+                                  </>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </>
                     ) : (
                       <div>
                         <input
@@ -1504,7 +1945,8 @@ export default function OnlineTest() {
                 <div className="online-test-sidebar-inner">
                   <div className="online-test-palette-section">
                     <h3 className="online-test-palette-title">Choose a question</h3>
-                    <div className="online-test-palette-legend">
+                    <div className="online-test-palette-legend" aria-label="Answer status key">
+                      <span className="online-test-palette-legend-prefix">Key —</span>
                       <span className="online-test-legend-item seen">Seen</span>
                       <span className="online-test-legend-item flagged">Flag (later)</span>
                       <span className="online-test-legend-item answered">Answered</span>
@@ -1513,11 +1955,10 @@ export default function OnlineTest() {
                     <div className="online-test-palette-scroll">
                       <div className="online-test-palette online-test-palette-grouped">
                         {paletteGroups.map((g) => (
-                          <div key={g.section} className="online-test-palette-group">
+                          <div key={g.sectionKey} className="online-test-palette-group">
                             {showPaletteSections && (
                               <div className="online-test-palette-group-label" title={g.section}>
-                                {g.section.replace(/^Part-[IVX]+ ·\s*/i, "").slice(0, 28)}
-                                {g.section.length > 28 ? "…" : ""}
+                                {g.section.length > 28 ? `${g.section.slice(0, 28)}…` : g.section}
                               </div>
                             )}
                             <div className="online-test-palette-group-btns">
@@ -1570,6 +2011,9 @@ export default function OnlineTest() {
   }
 
   if (phase === PHASE.RESULT) {
+    const answersAttemptedCount = questions.filter(
+      (q) => answers[q.id] !== undefined && answers[q.id] !== ""
+    ).length;
     const SMILEYS = [
       { value: 1, emoji: "😞", label: "Poor" },
       { value: 2, emoji: "😕", label: "Fair" },
@@ -1577,8 +2021,9 @@ export default function OnlineTest() {
       { value: 4, emoji: "🙂", label: "Good" },
       { value: 5, emoji: "😊", label: "Great" },
     ];
-    const handleCloseTest = () => navigate("/test");
     if (feedbackSubmitted) {
+      const waitingOnUpload =
+        !!recordedBlob && (uploadStatus === null || uploadStatus === "uploading");
       return (
         <>
           <Navbar />
@@ -1586,12 +2031,15 @@ export default function OnlineTest() {
             <div className="container py-5">
               <div className="online-test-result-card">
                 <div className="online-test-result-body">
-                  <span className="online-test-result-popup-done-emoji">🎉</span>
-                  <h2 className="online-test-result-title">Thank you</h2>
-                  <p className="online-test-result-popup-text mb-4">Your test is complete. Please reach out to our experts for further steps.</p>
-                  <button type="button" className="online-test-reg-btn" onClick={handleCloseTest}>
-                    Close
-                  </button>
+                  <span className="online-test-result-popup-done-emoji" aria-hidden="true">
+                    ✓
+                  </span>
+                  <h2 className="online-test-result-title">You have successfully submitted the test</h2>
+                  <p className="online-test-result-popup-text mb-0">
+                    {waitingOnUpload
+                      ? "Saving your recording and responses… You’ll be redirected to the home page in a moment."
+                      : "Thank you for your feedback. Taking you to the home page…"}
+                  </p>
                 </div>
               </div>
             </div>
@@ -1608,16 +2056,21 @@ export default function OnlineTest() {
             <div className="online-test-result-card">
               <div className="online-test-result-body">
                 <div className="online-test-result-score-box">
-                  <h2 className="online-test-result-title">Test submitted</h2>
+                  <h2 className="online-test-result-title">You have successfully submitted the test</h2>
                   {canComputeScore && gradedQuestionCount > 0 ? (
                     <p className="online-test-result-score">
                       Your score: {score} / {gradedQuestionCount}
                     </p>
-                  ) : null}
-                  <p className="online-test-result-score">Thank you for completing the test. Results will be shared by the organiser.</p>
+                  ) : (
+                    <p className="online-test-result-score text-muted">
+                      You attempted {answersAttemptedCount} of {questions.length} question{questions.length === 1 ? "" : "s"}. Responses are
+                      saved with your submission for the organiser to review.
+                    </p>
+                  )}
+                  <p className="online-test-result-score">Results will be shared by the organiser.</p>
                 </div>
                 <h3 className="online-test-result-popup-title mt-3">How was your experience?</h3>
-                <p className="online-test-result-popup-subtitle">Tap a smiley to rate</p>
+                <p className="online-test-result-popup-subtitle">Tap a smiley to rate (optional), add a comment, then continue</p>
                 <div className="online-test-result-smileys">
                   {SMILEYS.map((s) => (
                     <button
@@ -1667,7 +2120,7 @@ export default function OnlineTest() {
                     setFeedbackSubmitted(true);
                   }}
                 >
-                  Submit feedback
+                  Submit feedback and return home
                 </button>
               </div>
             </div>
