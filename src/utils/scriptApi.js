@@ -224,20 +224,31 @@ export function getDriveThumbnailFallbackUrl(fileId) {
 
 /**
  * Resolved figure URL for one question (same rules as OnlineTest stem image).
+ * Prefer servePaperQuestionImage when paperId + Drive id exist: getPaper injects
+ * drive.google.com/thumbnail URLs for <img> reliability, but thumbnails can crop
+ * tall multi-option figures; the web app streams the full uploaded blob.
  */
 export function resolveStemImageSrcForOnlineTest(question, paperId, questionIndex) {
   if (!question || typeof question !== "object") return "";
   const direct = String(question.imageUrl || question.questionImage || "").trim();
-  if (direct) {
-    if (direct.startsWith("data:") || direct.startsWith("http://") || direct.startsWith("https://")) return direct;
+  const fid =
+    String(question.imageFileId || "").trim() || driveFileIdFromUrl(String(question.imageUrl || ""));
+  const pid = (paperId || "").toString().trim();
+
+  /* Local / app-relative paths only (not http) — bundled papers under /public */
+  if (direct && !/^https?:\/\//i.test(direct)) {
+    if (direct.startsWith("data:")) return direct;
     if (direct.startsWith("/")) return direct;
     const base = (import.meta.env.BASE_URL || "/").replace(/\/$/, "");
     return `${base}/${direct.replace(/^\//, "")}`;
   }
-  const fid = question.imageFileId || driveFileIdFromUrl(question.imageUrl || "");
-  const pid = (paperId || "").toString().trim();
+
   if (fid && pid && pid !== "default") {
     return getServePaperQuestionImageUrl(pid, questionIndex);
+  }
+
+  if (direct && (/^https?:\/\//i.test(direct) || direct.startsWith("data:"))) {
+    return direct;
   }
   return String(resolveQuestionImageSrc(question) || "").trim();
 }
