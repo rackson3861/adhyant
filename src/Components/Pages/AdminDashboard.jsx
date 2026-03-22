@@ -557,7 +557,6 @@ export default function AdminDashboard() {
           setBulkClearPhrase("");
           setCodeActivity({});
           showAdminFeedback("success", "Fresh start unlocked", [
-            data.message || "Bulk reset complete.",
             `Submissions cleared: ${rm.submissions ?? 0}`,
             `Test sessions cleared: ${rm.testSessions ?? 0}`,
             `Test codes removed: ${rm.testCodes ?? 0}`,
