@@ -16,7 +16,8 @@ import {
 
 const RENDER_SCALE = 2;
 const CROP_PAD = 6;
-const OPTION_PAD_BELOW = 14;
+/** Extra canvas px below last “(4)” label so diagrams/dice under options 3–4 are not clipped (2× PDF scale). */
+const OPTION_PAD_BELOW = 120;
 const LAST_QUESTION_MAX_FALLBACK_H = 720;
 const JPEG_QUALITY = 70;
 const Q_RE = /\b([1-9]\d{0,2})\.(\s+)/g;

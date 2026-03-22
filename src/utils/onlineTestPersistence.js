@@ -44,6 +44,7 @@ function storageKey(paperId, testCode, gatePasscode, gateEmail) {
  * @param {number[]} payload.seenIndices
  * @param {number[]} payload.flaggedIndices
  * @param {object[]} payload.violations
+ * @param {string} [payload.submissionKey] - Apps Script chunked upload session key (resume)
  */
 export function saveTestProgress(payload) {
   try {
@@ -69,6 +70,7 @@ export function saveTestProgress(payload) {
       seenIndices,
       flaggedIndices,
       violations,
+      submissionKey,
     } = payload;
     const gatePw = (gatePasscode != null ? String(gatePasscode) : "").trim();
     if (timeLeft == null || timeLeft <= 0) {
@@ -97,6 +99,7 @@ export function saveTestProgress(payload) {
       seenIndices: Array.isArray(seenIndices) ? seenIndices : [],
       flaggedIndices: Array.isArray(flaggedIndices) ? flaggedIndices : [],
       violations: Array.isArray(violations) ? violations : [],
+      submissionKey: typeof submissionKey === "string" && submissionKey.trim() ? submissionKey.trim() : "",
     };
     localStorage.setItem(storageKey(paperId, testCode, gatePw, secondaryCode), JSON.stringify(data));
   } catch {

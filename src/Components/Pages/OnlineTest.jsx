@@ -28,6 +28,14 @@ import {
 import { preloadAllQuestionStemImages } from "../../utils/preloadQuestionImages";
 import { markGatePairSubmittedLocally } from "../../utils/gateSubmittedLocal";
 import {
+  CHUNK_INTERVAL_MS,
+  PRE_END_FLUSH_AT_SEC_LEFT,
+  buildChunkFileBaseNames,
+  buildChunkUploadPrefix,
+} from "../../utils/onlineTestRecordingChunks";
+import { buildQuestionTimeSpentMaps } from "../../utils/onlineTestQuestionTimeMetadata";
+import { buildQuestionEngagementPayload } from "../../utils/onlineTestQuestionEngagementMetadata";
+import {
   STORAGE_KEY_QUESTION_PAPER_ID,
   STORAGE_KEY_TEST_CODE,
   STORAGE_KEY_GATE_PASSWORD,
@@ -45,6 +53,52 @@ import "/src/assets/css/onlineTest.css";
 import adhyantLogo from "../../assets/img/adhyant-logo.png";
 
 const PHASE = { REGISTRATION: "registration", INSTRUCTIONS: "instructions", PERMISSION: "permission", TEST: "test", RESULT: "result" };
+
+function isAppsScriptRecordingUrl(url) {
+  return typeof url === "string" && /script\.google\.com|google\.com\/macos\/script/i.test(url);
+}
+
+/** Fresh URL each call — chunk stop handler must not capture a stale empty URL from mount. */
+function getRecordingPostUrl() {
+  return (
+    import.meta.env.NEXT_PUBLIC_RECORDING_UPLOAD_URL ||
+    import.meta.env.VITE_RECORDING_UPLOAD_URL ||
+    import.meta.env.VITE_TEST_SUBMISSION_URL ||
+    ""
+  );
+}
+
+function buildAnswersDetailedSnapshot(questions, answers) {
+  return questions.map((q) => {
+    const sel = answers[q.id] !== undefined && answers[q.id] !== "" ? answers[q.id] : null;
+    let selectedChoice = null;
+    let selectedOptionText = null;
+    if (q.type === "mcq" && sel != null) {
+      const s = String(sel).trim();
+      const opts = Array.isArray(q.options) ? q.options : [];
+      if (/^[1-4]$/.test(s)) {
+        selectedChoice = s;
+        const i = parseInt(s, 10) - 1;
+        if (opts[i] != null) selectedOptionText = String(opts[i]);
+      } else {
+        const i = opts.findIndex((o) => String(o).trim() === s);
+        if (i >= 0) {
+          selectedChoice = String(i + 1);
+          selectedOptionText = String(opts[i]);
+        }
+      }
+    }
+    return {
+      questionId: q.id,
+      paperQuestionNum: q.paperQuestionNum ?? null,
+      section: q.section || null,
+      type: q.type,
+      selected: sel,
+      selectedChoice,
+      selectedOptionText,
+    };
+  });
+}
 
 const CLASS_GRADE_OPTIONS = [
   { value: "", label: "Select class / grade" },
@@ -301,10 +355,42 @@ export default function OnlineTest() {
   const testPhasePrevFaceCountRef = useRef(0);
   /** Consumed once in startRecording to restore timer & start time after resume */
   const resumeForRecordingRef = useRef(null);
+  /** Apps Script: one submissionKey for all 10‑min segments + final clip */
+  const submissionKeyRef = useRef("");
+  const recordingSegmentIndexRef = useRef(0);
+  const segmentWallStartMsRef = useRef(0);
+  const chunkUploadInProgressRef = useRef(false);
+  const chunkedUploadPipelineDoneRef = useRef(false);
+  const chunkedRecordingEnabledRef = useRef(false);
+  const phaseRef = useRef(PHASE.REGISTRATION);
+  const preEndFlushDoneRef = useRef(false);
+  const flushRecordingSegmentRef = useRef(() => {});
+  const recordingChunkStopHandlerRef = useRef(() => {});
+  const latestChunkStopContextRef = useRef({
+    studentName: "",
+    studentEmail: "",
+    studentPhone: "",
+    studentClass: "",
+    studentAdhar: "",
+    title: "",
+    questions: [],
+    answers: {},
+    seenIndices: [],
+    flaggedIndices: [],
+    durationMinutes: 120,
+    maxMarks: null,
+    readTimeMinutes: null,
+    canComputeScore: false,
+    score: null,
+    gradedQuestionCount: null,
+    answerKeyPresent: false,
+  });
   /** Latest values for background autosave during TEST */
   const persistDataRef = useRef({});
   /** Skip student-details form when resuming saved in-progress test (same browser). */
   const resumeBootRef = useRef(false);
+  /** Stem <img> — detect already-decoded (cached) images so we are not stuck with loading overflow */
+  const stemImageElRef = useRef(null);
 
   const resumeEligibleSeconds = useMemo(() => {
     if (questions.length === 0 || typeof sessionStorage === "undefined") return 0;
@@ -343,6 +429,13 @@ export default function OnlineTest() {
       return;
     }
     setStemImageLoaded(false);
+    const id = requestAnimationFrame(() => {
+      const el = stemImageElRef.current;
+      if (el && el.complete && el.naturalHeight > 0) {
+        setStemImageLoaded(true);
+      }
+    });
+    return () => cancelAnimationFrame(id);
   }, [stemImageSrc, currentIndex]);
 
   useEffect(() => {
@@ -388,6 +481,32 @@ export default function OnlineTest() {
   const gradedQuestions = canComputeScore ? questions.filter(hasGradedKey) : [];
   const score = canComputeScore ? gradedQuestions.filter(isCorrect).length : null;
   const gradedQuestionCount = canComputeScore ? gradedQuestions.length : null;
+
+  useEffect(() => {
+    phaseRef.current = phase;
+  }, [phase]);
+
+  useEffect(() => {
+    latestChunkStopContextRef.current = {
+      studentName,
+      studentEmail,
+      studentPhone,
+      studentClass,
+      studentAdhar,
+      title,
+      questions,
+      answers,
+      seenIndices: Array.from(seenQuestions),
+      flaggedIndices: Array.from(flaggedQuestions),
+      durationMinutes,
+      maxMarks,
+      readTimeMinutes,
+      canComputeScore,
+      score,
+      gradedQuestionCount,
+      answerKeyPresent,
+    };
+  });
 
   const startMedia = useCallback(async () => {
     setMediaError(null);
@@ -582,6 +701,17 @@ export default function OnlineTest() {
     if (preloadRunIdRef.current !== runId) return;
 
     chunksRef.current = [];
+    const uploadEnvUrl = getRecordingPostUrl();
+    chunkedRecordingEnabledRef.current = isAppsScriptRecordingUrl(uploadEnvUrl);
+    if (resume?.submissionKey && String(resume.submissionKey).trim()) {
+      submissionKeyRef.current = String(resume.submissionKey).trim();
+    } else {
+      submissionKeyRef.current = `${Date.now()}_${Math.random().toString(36).slice(2, 14)}`;
+    }
+    recordingSegmentIndexRef.current = 0;
+    segmentWallStartMsRef.current = Date.now();
+    preEndFlushDoneRef.current = false;
+    chunkedUploadPipelineDoneRef.current = false;
     // Target ~100 MB per hour: 100*8*1024*1024/3600 ≈ 233 kbps total → video 180 + audio 48
     const mr = new MediaRecorder(streamRef.current, {
       mimeType: MediaRecorder.isTypeSupported("video/webm;codecs=vp9") ? "video/webm;codecs=vp9" : "video/webm",
@@ -592,12 +722,7 @@ export default function OnlineTest() {
       if (e.data.size) chunksRef.current.push(e.data);
     };
     mr.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: "video/webm" });
-      setRecordedBlob(blob);
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((t) => t.stop());
-        streamRef.current = null;
-      }
+      recordingChunkStopHandlerRef.current();
     };
     mr.start(2000);
     mediaRecorderRef.current = mr;
@@ -692,6 +817,18 @@ export default function OnlineTest() {
           alert1MinRef.current = true;
           setTimerWarning("1min");
         }
+        if (
+          prev === PRE_END_FLUSH_AT_SEC_LEFT &&
+          chunkedRecordingEnabledRef.current &&
+          !preEndFlushDoneRef.current
+        ) {
+          preEndFlushDoneRef.current = true;
+          try {
+            flushRecordingSegmentRef.current(false);
+          } catch {
+            /* ignore */
+          }
+        }
         return next;
       });
     }, 1000);
@@ -751,6 +888,7 @@ export default function OnlineTest() {
         seenIndices: d.seenIndices,
         flaggedIndices: d.flaggedIndices,
         violations: violationsRef.current.slice(),
+        submissionKey: submissionKeyRef.current || "",
       });
     };
 
@@ -764,6 +902,291 @@ export default function OnlineTest() {
       persist();
     };
   }, [phase]);
+
+  const flushRecordingSegment = useCallback((isFinal) => {
+    const mr = mediaRecorderRef.current;
+    if (!mr || mr.state !== "recording") return;
+    /**
+     * Bind "final" to THIS recorder instance — not a shared ref. Otherwise a late onstop from a
+     * periodic segment can read isFinal=true after the student clicked submit, and wrongly run the
+     * final-upload path (stops camera, ends chunks) while the exam should still be running.
+     */
+    try {
+      mr.__adhyantFinalSegment = !!isFinal;
+    } catch {
+      /* ignore */
+    }
+    try {
+      mr.stop();
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    flushRecordingSegmentRef.current = flushRecordingSegment;
+  }, [flushRecordingSegment]);
+
+  useEffect(() => {
+    if (phase !== PHASE.TEST) return;
+    if (!chunkedRecordingEnabledRef.current) return;
+    const id = setInterval(() => {
+      try {
+        flushRecordingSegmentRef.current(false);
+      } catch {
+        /* ignore */
+      }
+    }, CHUNK_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [phase]);
+
+  useEffect(() => {
+    const postPlain = (payload) => {
+      const uploadUrl = getRecordingPostUrl();
+      if (!uploadUrl) return Promise.resolve();
+      return fetch(uploadUrl, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify(payload),
+      });
+    };
+
+    recordingChunkStopHandlerRef.current = () => {
+      const uploadUrl = getRecordingPostUrl();
+      const stoppedMr = mediaRecorderRef.current;
+      const finalStop = !!(stoppedMr && stoppedMr.__adhyantFinalSegment);
+      if (stoppedMr) {
+        try {
+          delete stoppedMr.__adhyantFinalSegment;
+        } catch {
+          try {
+            stoppedMr.__adhyantFinalSegment = false;
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+
+      const blob = new Blob(chunksRef.current, { type: "video/webm" });
+      const streamNow = streamRef.current;
+      const useChunk = chunkedRecordingEnabledRef.current && !!uploadUrl;
+
+      if (!useChunk) {
+        if (blob.size) setRecordedBlob(blob);
+        else setRecordedBlob(null);
+        if (streamNow) {
+          streamNow.getTracks().forEach((t) => t.stop());
+          streamRef.current = null;
+        }
+        return;
+      }
+
+      const segStart = segmentWallStartMsRef.current;
+      const segEnd = Date.now();
+      const segIdx = recordingSegmentIndexRef.current;
+      const submissionKey = submissionKeyRef.current;
+      const ctx = latestChunkStopContextRef.current;
+      const testCode =
+        typeof sessionStorage !== "undefined" ? sessionStorage.getItem(STORAGE_KEY_TEST_CODE) || "" : "";
+      const questionPaperId =
+        typeof sessionStorage !== "undefined" ? sessionStorage.getItem(STORAGE_KEY_QUESTION_PAPER_ID) || undefined : undefined;
+      const sessionSecondary = (ctx.studentEmail || "").trim().toLowerCase();
+      const gatePasscodeMeta = readGatePasscodeForSession();
+      const chunkFilePrefix = buildChunkUploadPrefix(ctx.studentName, gatePasscodeMeta);
+      const { snapshotFileName, videoFileName } = buildChunkFileBaseNames(segStart, segEnd, chunkFilePrefix);
+
+      const answersByQuestionId = {};
+      ctx.questions.forEach((q) => {
+        const v = ctx.answers[q.id];
+        if (v !== undefined && v !== "") answersByQuestionId[q.id] = v;
+      });
+      const answersDetailed = buildAnswersDetailedSnapshot(ctx.questions, ctx.answers);
+      const answersAttemptedCount = ctx.questions.filter(
+        (q) => ctx.answers[q.id] !== undefined && ctx.answers[q.id] !== ""
+      ).length;
+
+      const buildMeta = (chunkPhaseStr) => {
+        const qtSlice = questionTimesRef.current.slice();
+        const timeSpentMeta = buildQuestionTimeSpentMaps(ctx.questions, qtSlice);
+        const engagementMeta = buildQuestionEngagementPayload(
+          ctx.questions,
+          ctx.answers,
+          ctx.seenIndices || [],
+          ctx.flaggedIndices || []
+        );
+        const base = {
+          studentName: (ctx.studentName || "").trim(),
+          studentEmail: (ctx.studentEmail || "").trim(),
+          studentPhone: (ctx.studentPhone || "").trim().replace(/\s/g, ""),
+          studentClass: (ctx.studentClass || "").trim(),
+          studentAdhar: (ctx.studentAdhar || "").trim().replace(/\s/g, ""),
+          questionTimesSeconds: qtSlice,
+          ...timeSpentMeta,
+          ...engagementMeta,
+          isMobile: isMobileRef.current,
+          events: violationsRef.current.slice(),
+          activityEvents: violationsRef.current.slice(),
+          score: ctx.canComputeScore ? ctx.score : null,
+          gradedQuestionCount: ctx.canComputeScore ? ctx.gradedQuestionCount : null,
+          answerKeyPresent: false,
+          scoringMode: "metadata_only",
+          paperSource: "local_questions",
+          questionPaperId,
+          answersAttemptedCount,
+          totalQuestions: ctx.questions.length,
+          durationMinutes: ctx.durationMinutes,
+          submittedAt: new Date().toISOString(),
+          testStartedAt: testStartTimeRef.current ? new Date(testStartTimeRef.current).toISOString() : null,
+          testCode: testCode || undefined,
+          secondaryCode: sessionSecondary || undefined,
+          gatePasscode: gatePasscodeMeta || undefined,
+          submissionKey,
+          answersByQuestionId,
+          answersDetailed,
+          paperTitle: ctx.title,
+          testSessionPayload: {
+            answersByQuestionId,
+            answersDetailed,
+            questionTimesSeconds: qtSlice,
+            ...timeSpentMeta,
+            ...engagementMeta,
+            activityEvents: violationsRef.current.slice(),
+          },
+          chunkedUpload: true,
+          chunkPhase: chunkPhaseStr,
+          segmentIndex: segIdx,
+          segmentStartedAt: new Date(segStart).toISOString(),
+          segmentEndedAt: new Date(segEnd).toISOString(),
+          snapshotFileName,
+        };
+        if (ctx.maxMarks != null && !Number.isNaN(ctx.maxMarks)) base.maxMarks = ctx.maxMarks;
+        if (ctx.readTimeMinutes != null && !Number.isNaN(ctx.readTimeMinutes)) base.readTimeMinutes = ctx.readTimeMinutes;
+        return base;
+      };
+
+      const videoMetaSmall = {
+        studentName: (ctx.studentName || "").trim(),
+        studentEmail: (ctx.studentEmail || "").trim(),
+        studentAdhar: (ctx.studentAdhar || "").trim().replace(/\s/g, ""),
+        studentPhone: (ctx.studentPhone || "").trim().replace(/\s/g, ""),
+        studentClass: (ctx.studentClass || "").trim(),
+        testCode: testCode || undefined,
+        secondaryCode: sessionSecondary || undefined,
+      };
+
+      const attachNewSegment = () => {
+        const s = streamRef.current;
+        if (!s || phaseRef.current !== PHASE.TEST) return;
+        chunksRef.current = [];
+        try {
+          const mr = new MediaRecorder(s, {
+            mimeType: MediaRecorder.isTypeSupported("video/webm;codecs=vp9") ? "video/webm;codecs=vp9" : "video/webm",
+            videoBitsPerSecond: 180000,
+            audioBitsPerSecond: 48000,
+          });
+          mr.ondataavailable = (e) => {
+            if (e.data.size) chunksRef.current.push(e.data);
+          };
+          mr.onstop = () => recordingChunkStopHandlerRef.current();
+          mr.start(2000);
+          mediaRecorderRef.current = mr;
+          setRecording(mr);
+        } catch {
+          /* ignore */
+        }
+      };
+
+      if (!finalStop) {
+        if (blob.size === 0) {
+          segmentWallStartMsRef.current = Date.now();
+          attachNewSegment();
+          return;
+        }
+        const metaPeriodic = buildMeta("periodic");
+        const segIdxForUpload = segIdx;
+        recordingSegmentIndexRef.current = segIdx + 1;
+        segmentWallStartMsRef.current = Date.now();
+        /** Resume recording immediately; metadata/video upload does not block the student UI or the next segment. */
+        attachNewSegment();
+        const uploadBlob = blob;
+        queueMicrotask(() => {
+          try {
+            postPlain({ action: "submitTestMetadata", submissionKey, metadata: metaPeriodic });
+          } catch {
+            /* ignore */
+          }
+          const reader = new FileReader();
+          reader.onload = () => {
+            try {
+              const base64 = typeof reader.result === "string" ? reader.result.split(",")[1] : "";
+              postPlain({
+                action: "submitTestVideo",
+                submissionKey,
+                chunkedUpload: true,
+                isLastChunk: false,
+                videoFileName,
+                chunkSegmentIndex: segIdxForUpload,
+                videoBase64: base64,
+                metadata: videoMetaSmall,
+              });
+            } catch {
+              /* ignore */
+            }
+          };
+          reader.onerror = () => {};
+          reader.readAsDataURL(uploadBlob);
+        });
+        return;
+      }
+
+      if (blob.size) setRecordedBlob(blob);
+      else setRecordedBlob(null);
+      chunkedUploadPipelineDoneRef.current = true;
+      setUploadStatus("uploading");
+      chunkUploadInProgressRef.current = true;
+      const metaFinal = buildMeta("final");
+      postPlain({ action: "submitTestMetadata", submissionKey, metadata: metaFinal });
+      if (blob.size === 0) {
+        chunkUploadInProgressRef.current = false;
+        setUploadStatus("uploaded");
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((t) => t.stop());
+          streamRef.current = null;
+        }
+        return;
+      }
+      const reader2 = new FileReader();
+      reader2.onload = () => {
+        const base64 = typeof reader2.result === "string" ? reader2.result.split(",")[1] : "";
+        postPlain({
+          action: "submitTestVideo",
+          submissionKey,
+          chunkedUpload: true,
+          isLastChunk: true,
+          videoFileName,
+          chunkSegmentIndex: segIdx,
+          videoBase64: base64,
+          metadata: videoMetaSmall,
+        });
+        chunkUploadInProgressRef.current = false;
+        setUploadStatus("uploaded");
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((t) => t.stop());
+          streamRef.current = null;
+        }
+      };
+      reader2.onerror = () => {
+        chunkUploadInProgressRef.current = false;
+        setUploadStatus("upload_failed");
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((t) => t.stop());
+          streamRef.current = null;
+        }
+      };
+      reader2.readAsDataURL(blob);
+    };
+  }, [setRecordedBlob, setRecording, setUploadStatus]);
 
   useEffect(() => {
     if (phase !== PHASE.TEST || !streamRef.current || !sidePreviewRef.current) return;
@@ -964,8 +1387,18 @@ export default function OnlineTest() {
       const times = questionTimesRef.current;
       times[currentIndex] = elapsed;
     }
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-      mediaRecorderRef.current.stop();
+    const mrSubmit = mediaRecorderRef.current;
+    if (mrSubmit && mrSubmit.state === "recording") {
+      try {
+        mrSubmit.__adhyantFinalSegment = true;
+      } catch {
+        /* ignore */
+      }
+      try {
+        mrSubmit.stop();
+      } catch {
+        /* ignore */
+      }
     }
     setPhase(PHASE.RESULT);
     setRecording(null);
@@ -973,48 +1406,91 @@ export default function OnlineTest() {
 
   const savedOnceRef = useRef(false);
   const redirectedAfterSubmitRef = useRef(false);
+  /** After feedback: 5 → 1 then redirect (null = not started yet). */
+  const [postFeedbackRedirectSeconds, setPostFeedbackRedirectSeconds] = useState(null);
+  const postFeedbackRedirectStartedRef = useRef(false);
+
+  const clearSessionAndGoHome = useCallback(() => {
+    if (redirectedAfterSubmitRef.current) return;
+    redirectedAfterSubmitRef.current = true;
+    try {
+      if (typeof sessionStorage !== "undefined") {
+        sessionStorage.removeItem(STORAGE_KEY_TEST_CODE);
+        sessionStorage.removeItem(STORAGE_KEY_GATE_PASSWORD);
+        sessionStorage.removeItem(STORAGE_KEY_QUESTION_PAPER_ID);
+        sessionStorage.removeItem(STORAGE_KEY_ALREADY_SUBMITTED);
+      }
+    } catch {
+      /* ignore */
+    }
+    navigate("/");
+  }, [navigate]);
 
   /**
-   * After student submits feedback: when upload has finished (or there was no recording), go home and clear gate session.
-   * Do not redirect before feedback — students must see success copy and submit experience feedback first.
+   * After student submits feedback: when upload has finished (or no recording), start 5s countdown then go home.
    */
   useEffect(() => {
-    if (phase !== PHASE.RESULT) return;
-    if (!feedbackSubmitted) return;
-    if (redirectedAfterSubmitRef.current) return;
-    const clearSessionAndGoHome = () => {
-      if (redirectedAfterSubmitRef.current) return;
-      redirectedAfterSubmitRef.current = true;
-      try {
-        if (typeof sessionStorage !== "undefined") {
-          sessionStorage.removeItem(STORAGE_KEY_TEST_CODE);
-          sessionStorage.removeItem(STORAGE_KEY_GATE_PASSWORD);
-          sessionStorage.removeItem(STORAGE_KEY_QUESTION_PAPER_ID);
-          sessionStorage.removeItem(STORAGE_KEY_ALREADY_SUBMITTED);
-        }
-      } catch {
-        /* ignore */
-      }
-      navigate("/");
-    };
-    if (!recordedBlob) {
-      clearSessionAndGoHome();
+    if (phase !== PHASE.RESULT) {
+      postFeedbackRedirectStartedRef.current = false;
+      setPostFeedbackRedirectSeconds(null);
       return;
     }
-    if (uploadStatus === null || uploadStatus === "uploading") return;
-    if (
+    if (!feedbackSubmitted) {
+      postFeedbackRedirectStartedRef.current = false;
+      setPostFeedbackRedirectSeconds(null);
+      return;
+    }
+    if (redirectedAfterSubmitRef.current) return;
+
+    const uploadSettled =
+      !recordedBlob ||
       uploadStatus === "uploaded" ||
       uploadStatus === "local_only" ||
       uploadStatus === "upload_failed" ||
-      uploadStatus === "save_failed"
-    ) {
-      const t = setTimeout(clearSessionAndGoHome, 600);
-      return () => clearTimeout(t);
+      uploadStatus === "save_failed";
+    if (!uploadSettled) return;
+    if (recordedBlob && (uploadStatus === null || uploadStatus === "uploading")) return;
+
+    if (!postFeedbackRedirectStartedRef.current) {
+      postFeedbackRedirectStartedRef.current = true;
+      setPostFeedbackRedirectSeconds(5);
     }
-  }, [phase, feedbackSubmitted, recordedBlob, uploadStatus, navigate]);
+  }, [phase, feedbackSubmitted, recordedBlob, uploadStatus]);
 
   useEffect(() => {
-    if (phase !== PHASE.RESULT || !recordedBlob || savedOnceRef.current) return;
+    if (postFeedbackRedirectSeconds === null) return;
+    if (postFeedbackRedirectSeconds <= 0) {
+      clearSessionAndGoHome();
+      return;
+    }
+    const t = setTimeout(() => {
+      setPostFeedbackRedirectSeconds((s) => (s == null ? null : s - 1));
+    }, 1000);
+    return () => clearTimeout(t);
+  }, [postFeedbackRedirectSeconds, clearSessionAndGoHome]);
+
+  useEffect(() => {
+    if (phase !== PHASE.RESULT || savedOnceRef.current) return;
+    if (chunkedUploadPipelineDoneRef.current) {
+      savedOnceRef.current = true;
+      if (recordedBlob) {
+        import("../../utils/recordingDb")
+          .then(({ saveRecording }) =>
+            saveRecording({
+              blob: recordedBlob,
+              score: canComputeScore ? score : null,
+              totalQuestions: questions.length,
+              durationMinutes,
+            })
+          )
+          .then((id) => {
+            if (id != null) setSavedRecordingId(id);
+          })
+          .catch(() => {});
+      }
+      return;
+    }
+    if (!recordedBlob) return;
     savedOnceRef.current = true;
     const uploadUrl = import.meta.env.NEXT_PUBLIC_RECORDING_UPLOAD_URL || import.meta.env.VITE_RECORDING_UPLOAD_URL || import.meta.env.VITE_TEST_SUBMISSION_URL;
     const testCode = typeof sessionStorage !== "undefined" ? sessionStorage.getItem(STORAGE_KEY_TEST_CODE) : null;
@@ -1025,13 +1501,18 @@ export default function OnlineTest() {
     const answersAttemptedCount = questions.filter(
       (q) => answers[q.id] !== undefined && answers[q.id] !== ""
     ).length;
+    const qtForMeta = Array.isArray(questionTimesRef.current) ? questionTimesRef.current.slice() : [];
+    const timeSpentMetaSubmit = buildQuestionTimeSpentMaps(questions, qtForMeta);
+    const engagementMetaSubmit = buildQuestionEngagementPayload(questions, answers, seenQuestions, flaggedQuestions);
     const metadata = {
       studentName: (studentName || "").trim(),
       studentEmail: (studentEmail || "").trim(),
       studentPhone: (studentPhone || "").trim().replace(/\s/g, ""),
       studentClass: (studentClass || "").trim(),
       studentAdhar: (studentAdhar || "").trim().replace(/\s/g, ""),
-      questionTimesSeconds: questionTimesRef.current,
+      questionTimesSeconds: qtForMeta,
+      ...timeSpentMetaSubmit,
+      ...engagementMetaSubmit,
       isMobile: isMobileRef.current,
       /** Proctoring / integrity signals (tab blur, copy, resize, face, etc.) */
       events: violationsRef.current,
@@ -1118,7 +1599,9 @@ export default function OnlineTest() {
         testSessionPayload: {
           answersByQuestionId,
           answersDetailed,
-          questionTimesSeconds: questionTimesRef.current,
+          questionTimesSeconds: qtForMeta,
+          ...timeSpentMetaSubmit,
+          ...engagementMetaSubmit,
           activityEvents: violationsRef.current,
         },
         ...(maxMarks != null && !Number.isNaN(maxMarks) ? { maxMarks } : {}),
@@ -1169,7 +1652,9 @@ export default function OnlineTest() {
         testSessionPayload: {
           answersByQuestionId,
           answersDetailed,
-          questionTimesSeconds: questionTimesRef.current,
+          questionTimesSeconds: qtForMeta,
+          ...timeSpentMetaSubmit,
+          ...engagementMetaSubmit,
           activityEvents: violationsRef.current,
         },
       };
@@ -1193,7 +1678,9 @@ export default function OnlineTest() {
               testSessionPayload: {
                 answersByQuestionId,
                 answersDetailed,
-                questionTimesSeconds: questionTimesRef.current,
+                questionTimesSeconds: qtForMeta,
+                ...timeSpentMetaSubmit,
+                ...engagementMetaSubmit,
                 activityEvents: violationsRef.current,
               },
             },
@@ -1291,6 +1778,7 @@ export default function OnlineTest() {
     resumeForRecordingRef.current = {
       timeLeft: snap.timeLeft,
       testStartedAt: startedAt,
+      submissionKey: typeof snap.submissionKey === "string" ? snap.submissionKey : "",
     };
     setSeenQuestions(new Set(Array.isArray(snap.seenIndices) && snap.seenIndices.length ? snap.seenIndices : [idx]));
     setFlaggedQuestions(new Set(Array.isArray(snap.flaggedIndices) ? snap.flaggedIndices : []));
@@ -1785,14 +2273,14 @@ export default function OnlineTest() {
             <div className="online-test-header">
               <h1 className="online-test-header-title online-test-exam-name online-test-exam-name--compact">{title}</h1>
               <div className="online-test-header-meta">
-                <span
-                  className={`online-test-timer ${timeLeft <= 60 ? "online-test-timer-red" : timeLeft <= 300 ? "online-test-timer-orange" : ""}`}
-                >
-                  ⏱ Time left: {formatTimeCountdown(timeLeft)}
-                </span>
                 <span className="online-test-meta-text">Recording · Face & activity monitored</span>
                 <span className="online-test-env-badge">
                   {isMobileRef.current ? "Mobile" : "Desktop"}
+                </span>
+                <span
+                  className={`online-test-timer online-test-timer--end ${timeLeft <= 60 ? "online-test-timer-red" : timeLeft <= 300 ? "online-test-timer-orange" : ""}`}
+                >
+                  ⏱ Time left: {formatTimeCountdown(timeLeft)}
                 </span>
               </div>
             </div>
@@ -1822,6 +2310,7 @@ export default function OnlineTest() {
                             <div className="online-test-question-image-skeleton" role="status" aria-label="Loading question image" />
                           ) : null}
                           <img
+                            ref={stemImageElRef}
                             key={`qfig-${currentIndex}-${currentQ.id}`}
                             src={stemImageSrc}
                             alt="Question figure — part of this question"
@@ -2014,6 +2503,11 @@ export default function OnlineTest() {
     const answersAttemptedCount = questions.filter(
       (q) => answers[q.id] !== undefined && answers[q.id] !== ""
     ).length;
+    const totalQuestionsCount = questions.length;
+    const answeredFractionLabel =
+      totalQuestionsCount > 0
+        ? `${answersAttemptedCount}/${totalQuestionsCount}`
+        : `${answersAttemptedCount}/0`;
     const SMILEYS = [
       { value: 1, emoji: "😞", label: "Poor" },
       { value: 2, emoji: "😕", label: "Fair" },
@@ -2024,6 +2518,8 @@ export default function OnlineTest() {
     if (feedbackSubmitted) {
       const waitingOnUpload =
         !!recordedBlob && (uploadStatus === null || uploadStatus === "uploading");
+      const showRedirectTimer =
+        !waitingOnUpload && postFeedbackRedirectSeconds != null && postFeedbackRedirectSeconds > 0;
       return (
         <>
           <Navbar />
@@ -2035,11 +2531,27 @@ export default function OnlineTest() {
                     ✓
                   </span>
                   <h2 className="online-test-result-title">You have successfully submitted the test</h2>
-                  <p className="online-test-result-popup-text mb-0">
-                    {waitingOnUpload
-                      ? "Saving your recording and responses… You’ll be redirected to the home page in a moment."
-                      : "Thank you for your feedback. Taking you to the home page…"}
-                  </p>
+                  <div className="online-test-result-answered-summary online-test-result-answered-summary--compact">
+                    <p className="online-test-result-answered-label">Questions answered</p>
+                    <p className="online-test-result-answered-fraction" aria-label={`${answersAttemptedCount} of ${totalQuestionsCount} questions answered`}>
+                      {answeredFractionLabel}
+                    </p>
+                  </div>
+                  {waitingOnUpload ? (
+                    <p className="online-test-result-popup-text mb-0">
+                      Saving your recording and responses… You’ll be redirected shortly after upload finishes.
+                    </p>
+                  ) : showRedirectTimer ? (
+                    <p className="online-test-result-popup-text mb-0" role="status" aria-live="polite">
+                      Thank you for your feedback.{" "}
+                      <span className="online-test-result-redirect-countdown">
+                        Redirecting to home in{" "}
+                        <span className="online-test-result-redirect-countdown-num">{postFeedbackRedirectSeconds}</span>s
+                      </span>
+                    </p>
+                  ) : (
+                    <p className="online-test-result-popup-text mb-0">Preparing redirect…</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -2057,14 +2569,19 @@ export default function OnlineTest() {
               <div className="online-test-result-body">
                 <div className="online-test-result-score-box">
                   <h2 className="online-test-result-title">You have successfully submitted the test</h2>
+                  <div className="online-test-result-answered-summary">
+                    <p className="online-test-result-answered-label">Questions answered</p>
+                    <p className="online-test-result-answered-fraction" aria-label={`${answersAttemptedCount} of ${totalQuestionsCount} questions answered`}>
+                      {answeredFractionLabel}
+                    </p>
+                  </div>
                   {canComputeScore && gradedQuestionCount > 0 ? (
                     <p className="online-test-result-score">
                       Your score: {score} / {gradedQuestionCount}
                     </p>
                   ) : (
                     <p className="online-test-result-score text-muted">
-                      You attempted {answersAttemptedCount} of {questions.length} question{questions.length === 1 ? "" : "s"}. Responses are
-                      saved with your submission for the organiser to review.
+                      Responses are saved with your submission for the organiser to review.
                     </p>
                   )}
                   <p className="online-test-result-score">Results will be shared by the organiser.</p>

@@ -16,8 +16,8 @@ import {
 
 const RENDER_SCALE = 2;
 const CROP_PAD = 6;
-/** Pixels below the last option marker (e.g. (4)) — tight crop, no full page tail. */
-const OPTION_PAD_BELOW = 14;
+/** Pixels below the last option marker (e.g. (4)); large pad so diagrams under (3)/(4) are not clipped (same as extract script). */
+const OPTION_PAD_BELOW = 120;
 const LAST_QUESTION_MAX_FALLBACK_H = 720;
 const JPEG_QUALITY = 0.7;
 const Q_RE = /\b([1-9]\d{0,2})\.(\s+)/g;
