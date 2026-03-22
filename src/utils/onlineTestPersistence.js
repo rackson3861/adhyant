@@ -2,7 +2,11 @@
  * Save / restore in-progress online test so students can resume after leaving the page.
  * Stored in localStorage, scoped by paper + test code + gate passcode + student email (lowercase).
  * Passcode is required so multiple students on the same shared test code do not share one local snapshot.
+ *
+ * Also syncs to the server periodically for cross-device resume.
  */
+
+import { getSaveProgressUrl, getLoadProgressUrl, getClearProgressUrl } from "./scriptApi";
 
 const STORAGE_PREFIX = "adhyant_online_test_progress_v2_";
 const MAX_AGE_MS = 48 * 60 * 60 * 1000; // 48 hours
@@ -176,4 +180,65 @@ export function findLatestTestProgressForPaperAndCode(paperId, testCode, current
   } catch {
     return null;
   }
+}
+
+// ============================================================================
+// Server-side progress sync (cross-device resume)
+// ============================================================================
+
+let _serverSaveInFlight = false;
+
+/**
+ * Save progress to the server. Fire-and-forget; does not block the UI.
+ * Throttled: skips if a previous save is still in flight.
+ */
+export function saveProgressToServer(testCode, gatePasscode, email, snapshotData) {
+  if (_serverSaveInFlight) return;
+  const code = (testCode || "").trim().toUpperCase();
+  const pc = (gatePasscode || "").trim();
+  const em = (email || "").trim().toLowerCase();
+  if (!code || !pc || !em) return;
+  const json = JSON.stringify(snapshotData);
+  const url = getSaveProgressUrl(code, pc, em, json);
+  if (!url) return;
+  _serverSaveInFlight = true;
+  fetch(url)
+    .catch(() => {})
+    .finally(() => { _serverSaveInFlight = false; });
+}
+
+/**
+ * Load progress from the server. Returns the snapshot object or null.
+ */
+export async function loadProgressFromServer(testCode, gatePasscode, email) {
+  const code = (testCode || "").trim().toUpperCase();
+  const pc = (gatePasscode || "").trim();
+  const em = (email || "").trim().toLowerCase();
+  if (!code || !pc || !em) return null;
+  const url = getLoadProgressUrl(code, pc, em);
+  if (!url) return null;
+  try {
+    const r = await fetch(url);
+    const text = await r.text();
+    const data = JSON.parse(text);
+    if (data.status === "success" && data.progress) {
+      return data.progress;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Clear server-side progress after submission. Fire-and-forget.
+ */
+export function clearProgressOnServer(testCode, gatePasscode, email) {
+  const code = (testCode || "").trim().toUpperCase();
+  const pc = (gatePasscode || "").trim();
+  const em = (email || "").trim().toLowerCase();
+  if (!code || !pc || !em) return;
+  const url = getClearProgressUrl(code, pc, em);
+  if (!url) return;
+  fetch(url).catch(() => {});
 }

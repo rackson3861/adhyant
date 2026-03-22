@@ -23,6 +23,9 @@ import {
   loadTestProgress,
   clearTestProgress,
   findLatestTestProgressForPaperAndCode,
+  saveProgressToServer,
+  loadProgressFromServer,
+  clearProgressOnServer,
 } from "../../utils/onlineTestPersistence";
 import { preloadAllQuestionStemImages } from "../../utils/preloadQuestionImages";
 import { markGatePairSubmittedLocally } from "../../utils/gateSubmittedLocal";
@@ -121,22 +124,27 @@ function classGradeSelectOptions(studentClass) {
 const MIN_VIDEO_WIDTH = 160;
 const MIN_VIDEO_HEIGHT = 120;
 
-// Mobile/tablet detection: userAgent, touch, screen size – independent of video; works with reduced capture
+// Mobile/tablet detection: userAgent + screen heuristics. Avoids false positives on desktop
+// laptops with touch screens or smaller monitors.
 function isMobileDevice() {
   if (typeof navigator === "undefined" || typeof window === "undefined") return false;
+  // 1) UserAgent-based (most reliable)
   const ua = (navigator.userAgent || "").toLowerCase();
   const plat = (navigator.platform || "").toLowerCase();
-  const uaMobile =
-    /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile|tablet|kindle|silk|crios|fxios|edgios|miui|oneui/i.test(ua) ||
-    /android|iphone|ipad/i.test(plat);
-  if (uaMobile) return true;
-  const w = typeof window.innerWidth === "number" ? window.innerWidth : window.screen?.width ?? 0;
-  const h = typeof window.innerHeight === "number" ? window.innerHeight : window.screen?.height ?? 0;
-  if (w > 0 && (w <= 768 || h <= 768)) return true;
-  if (window.matchMedia && (window.matchMedia("(max-width: 768px)").matches || window.matchMedia("(max-height: 768px)").matches)) return true;
-  const touch = "ontouchstart" in window || navigator.maxTouchPoints > 0;
-  if (touch && (w <= 1024 || h <= 1024)) return true;
+  if (/android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|kindle|silk/i.test(ua)) return true;
+  if (/android|iphone|ipad/i.test(plat)) return true;
+  // 2) Modern UA Client Hints
   if (navigator.userAgentData && typeof navigator.userAgentData.mobile === "boolean" && navigator.userAgentData.mobile) return true;
+  // 3) Screen-based: only flag if BOTH dimensions are small (phone/small tablet portrait/landscape).
+  //    Using screen size (physical), not viewport (can be resized).
+  const sw = window.screen?.width ?? 0;
+  const sh = window.screen?.height ?? 0;
+  const screenSmall = sw > 0 && sh > 0 && Math.max(sw, sh) <= 1024 && Math.min(sw, sh) <= 768;
+  // 4) Touch + small screen = mobile. Touch alone is not enough (many laptops have touch).
+  const touch = "ontouchstart" in window || navigator.maxTouchPoints > 0;
+  if (touch && screenSmall) return true;
+  // 5) Very small screen even without touch (some old phones)
+  if (sw > 0 && sh > 0 && Math.max(sw, sh) <= 768) return true;
   return false;
 }
 
@@ -933,14 +941,49 @@ export default function OnlineTest() {
       });
     };
 
+    const persistToServer = () => {
+      const d = persistDataRef.current;
+      if (!d.questionCount) return;
+      const secondaryCode = (d.studentEmail || "").trim().toLowerCase();
+      const gatePw =
+        typeof sessionStorage !== "undefined" ? (sessionStorage.getItem(STORAGE_KEY_GATE_PASSWORD) || "").trim() : "";
+      if (!testCode || !gatePw || !secondaryCode) return;
+      saveProgressToServer(testCode, gatePw, secondaryCode, {
+        v: 1,
+        savedAt: Date.now(),
+        paperId,
+        testCode: testCode.toUpperCase(),
+        secondaryCode,
+        timeLeft: Math.floor(d.timeLeft),
+        durationMinutes: d.durationMinutes,
+        questionCount: d.questionCount,
+        answers: d.answers && typeof d.answers === "object" ? d.answers : {},
+        currentIndex: Math.max(0, Math.floor(d.currentIndex || 0)),
+        studentName: d.studentName || "",
+        studentEmail: d.studentEmail || "",
+        studentPhone: d.studentPhone || "",
+        studentClass: d.studentClass || "",
+        studentAdhar: d.studentAdhar || "",
+        questionTimesSeconds: questionTimesRef.current.slice(),
+        testStartedAt: testStartTimeRef.current,
+        seenIndices: d.seenIndices,
+        flaggedIndices: d.flaggedIndices,
+        violations: violationsRef.current.slice(),
+        submissionKey: submissionKeyRef.current || "",
+      });
+    };
+
     const id = setInterval(persist, 7000);
+    const serverId = setInterval(persistToServer, 5 * 60 * 1000);
     window.addEventListener("pagehide", persist);
     window.addEventListener("beforeunload", persist);
     return () => {
       clearInterval(id);
+      clearInterval(serverId);
       window.removeEventListener("pagehide", persist);
       window.removeEventListener("beforeunload", persist);
       persist();
+      persistToServer();
     };
   }, [phase]);
 
@@ -1320,7 +1363,7 @@ export default function OnlineTest() {
             noFaceCountRef.current = 0;
           } else {
             noFaceCountRef.current = (noFaceCountRef.current || 0) + 1;
-            if (noFaceCountRef.current >= 1) {
+            if (noFaceCountRef.current >= 4) {
               noFaceCountRef.current = 0;
               const ev = { type: "looked_away", timestamp: new Date().toISOString() };
               violationsRef.current.push(ev);
@@ -1328,7 +1371,7 @@ export default function OnlineTest() {
           }
         } catch (e) {
           noFaceCountRef.current = (noFaceCountRef.current || 0) + 1;
-          if (noFaceCountRef.current >= 2) {
+          if (noFaceCountRef.current >= 5) {
             noFaceCountRef.current = 0;
             const ev = { type: "looked_away", timestamp: new Date().toISOString() };
             violationsRef.current.push(ev);
@@ -1338,13 +1381,13 @@ export default function OnlineTest() {
 
       if (phoneInCameraModelRef.current && videoReady) {
         phoneCheckTicks += 1;
-        if (phoneCheckTicks >= 1) {
+        if (phoneCheckTicks >= 3) {
           phoneCheckTicks = 0;
           try {
-            const predictions = await phoneInCameraModelRef.current.detect(video, 20, 0.05);
+            const predictions = await phoneInCameraModelRef.current.detect(video, 20, 0.25);
             const isPhoneClass = (cls) => (cls && String(cls).toLowerCase().replace(/\s+/g, " ") === "cell phone");
-            const hasPhone = predictions.some((p) => isPhoneClass(p.class) && p.score >= 0.08);
-            const hasLaptop = predictions.some((p) => p.class && String(p.class).toLowerCase() === "laptop" && p.score >= 0.1);
+            const hasPhone = predictions.some((p) => isPhoneClass(p.class) && p.score >= 0.35);
+            const hasLaptop = predictions.some((p) => p.class && String(p.class).toLowerCase() === "laptop" && p.score >= 0.3);
             const suspicious = hasPhone || hasLaptop;
             if (suspicious && Date.now() - lastPhoneFlagRef.current > 5000) {
               lastPhoneFlagRef.current = Date.now();
@@ -1416,6 +1459,7 @@ export default function OnlineTest() {
       const secondaryCode = (studentEmail || "").trim().toLowerCase();
       const gatePw = readGatePasscodeForSession();
       clearTestProgress(paperId, testCode, secondaryCode, gatePw);
+      clearProgressOnServer(testCode, gatePw, secondaryCode);
       sessionStorage.setItem(STORAGE_KEY_ALREADY_SUBMITTED, "1");
       const gp = readGatePasscodeForSession();
       if (testCode && gp) {
@@ -1767,19 +1811,9 @@ export default function OnlineTest() {
     return `${m}:${pad(sec)}`;
   };
 
-  const handleResumeFromSnapshot = useCallback(() => {
-    if (typeof sessionStorage === "undefined" || questions.length === 0) return;
-    const paperId = sessionStorage.getItem(STORAGE_KEY_QUESTION_PAPER_ID) || "default";
-    const testCode = sessionStorage.getItem(STORAGE_KEY_TEST_CODE) || "";
-    const keyEmail = (studentEmail || "").trim().toLowerCase();
-    const gatePw = readGatePasscodeForSession();
-    let snap = keyEmail
-      ? loadTestProgress(paperId, testCode, questions.length, keyEmail, gatePw)
-      : findLatestTestProgressForPaperAndCode(paperId, testCode, questions.length, gatePw);
-    if (!snap || snap.timeLeft <= 0) {
-      resumeBootRef.current = false;
-      return;
-    }
+  const applySnapshot = useCallback((snap) => {
+    if (!snap || snap.timeLeft <= 0) return false;
+    if (typeof snap.questionCount === "number" && questions.length > 0 && snap.questionCount !== questions.length) return false;
     setStudentName(snap.studentName || "");
     setStudentEmail(snap.studentEmail || "");
     setStudentPhone(snap.studentPhone || "");
@@ -1804,24 +1838,65 @@ export default function OnlineTest() {
     setResumeTimeLeftHint(snap.timeLeft);
     setRegistrationError("");
     setPhase(PHASE.INSTRUCTIONS);
-  }, [questions.length, studentEmail]);
+    return true;
+  }, [questions.length]);
+
+  const handleResumeFromSnapshot = useCallback(() => {
+    if (typeof sessionStorage === "undefined" || questions.length === 0) return;
+    const paperId = sessionStorage.getItem(STORAGE_KEY_QUESTION_PAPER_ID) || "default";
+    const testCode = sessionStorage.getItem(STORAGE_KEY_TEST_CODE) || "";
+    const keyEmail = (studentEmail || "").trim().toLowerCase();
+    const gatePw = readGatePasscodeForSession();
+    let snap = keyEmail
+      ? loadTestProgress(paperId, testCode, questions.length, keyEmail, gatePw)
+      : findLatestTestProgressForPaperAndCode(paperId, testCode, questions.length, gatePw);
+    if (snap && snap.timeLeft > 0) {
+      if (applySnapshot(snap)) return;
+    }
+    // No local snapshot — try server (cross-device resume)
+    if (keyEmail && testCode && gatePw) {
+      loadProgressFromServer(testCode, gatePw, keyEmail).then((serverSnap) => {
+        if (serverSnap && serverSnap.timeLeft > 0) {
+          applySnapshot(serverSnap);
+        } else {
+          resumeBootRef.current = false;
+        }
+      });
+    } else {
+      resumeBootRef.current = false;
+    }
+  }, [questions.length, studentEmail, applySnapshot]);
 
   useLayoutEffect(() => {
     if (phase !== PHASE.REGISTRATION) return;
-    if (!questions.length || resumeEligibleSeconds <= 0) return;
+    if (!questions.length) return;
     if (resumeBootRef.current) return;
     if (typeof sessionStorage === "undefined") return;
     const paperId = sessionStorage.getItem(STORAGE_KEY_QUESTION_PAPER_ID) || "default";
     const testCode = sessionStorage.getItem(STORAGE_KEY_TEST_CODE) || "";
     const keyEmail = (studentEmail || "").trim().toLowerCase();
     const gatePw = readGatePasscodeForSession();
+    // Check local first
     let snapPre = keyEmail
       ? loadTestProgress(paperId, testCode, questions.length, keyEmail, gatePw)
       : findLatestTestProgressForPaperAndCode(paperId, testCode, questions.length, gatePw);
-    if (!snapPre || snapPre.timeLeft <= 0) return;
-    resumeBootRef.current = true;
-    handleResumeFromSnapshot();
-  }, [phase, questions.length, resumeEligibleSeconds, handleResumeFromSnapshot, studentEmail]);
+    if (snapPre && snapPre.timeLeft > 0) {
+      resumeBootRef.current = true;
+      handleResumeFromSnapshot();
+      return;
+    }
+    // No local snapshot — check server for cross-device resume
+    if (keyEmail && testCode && gatePw) {
+      resumeBootRef.current = true;
+      loadProgressFromServer(testCode, gatePw, keyEmail).then((serverSnap) => {
+        if (serverSnap && serverSnap.timeLeft > 0) {
+          applySnapshot(serverSnap);
+        } else {
+          resumeBootRef.current = false;
+        }
+      });
+    }
+  }, [phase, questions.length, resumeEligibleSeconds, handleResumeFromSnapshot, studentEmail, applySnapshot]);
 
   const goToQuestion = (index) => {
     if (index < 0 || index >= questions.length) return;

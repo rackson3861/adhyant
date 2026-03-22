@@ -534,7 +534,8 @@
         "4"
       ],
       "min": 0,
-      "max": 999
+      "max": 999,
+      "image": "papers/abquest-class-xiii-22-03-26/q-33.jpg"
     },
     {
       "id": "q34",
@@ -549,7 +550,8 @@
         "4"
       ],
       "min": 0,
-      "max": 999
+      "max": 999,
+      "image": "papers/abquest-class-xiii-22-03-26/q-34.jpg"
     },
     {
       "id": "q35",

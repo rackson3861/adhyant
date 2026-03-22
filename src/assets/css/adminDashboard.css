@@ -409,6 +409,262 @@
   }
 }
 
+/* Collapsible admin sections */
+.admin-dash-section {
+  margin-bottom: 1rem;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.04);
+  overflow: hidden;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.admin-dash-section[open] {
+  box-shadow: 0 4px 24px rgba(15, 23, 42, 0.07);
+  border-color: #cbd5e1;
+}
+
+.admin-dash-section--danger {
+  border-color: #fca5a5;
+}
+
+.admin-dash-section--danger[open] {
+  border-color: #ef4444;
+  box-shadow: 0 4px 24px rgba(239, 68, 68, 0.1);
+}
+
+.admin-dash-section__header {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 1rem 1.25rem;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  transition: background 0.15s ease;
+}
+
+.admin-dash-section__header::-webkit-details-marker {
+  display: none;
+}
+
+.admin-dash-section__header:hover {
+  background: #f8fafc;
+}
+
+.admin-dash-section__icon {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #eff6ff, #e0f2fe);
+  font-size: 0.85rem;
+  color: #0558d4;
+}
+
+.admin-dash-section--danger .admin-dash-section__icon {
+  background: linear-gradient(135deg, #fef2f2, #fee2e2);
+  color: #dc2626;
+}
+
+.admin-dash-section__title {
+  font-weight: 800;
+  font-size: 1rem;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+}
+
+.admin-dash-section__hint {
+  margin-left: auto;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #94a3b8;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: #f1f5f9;
+}
+
+.admin-dash-section__body {
+  padding: 0 1.25rem 1.25rem;
+}
+
+/* Test code cards (nested inside section) */
+.admin-code-card {
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #fafbfc;
+  overflow: hidden;
+  margin-bottom: 0.65rem;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.admin-code-card[open] {
+  border-color: #93c5fd;
+  background: #fff;
+  box-shadow: 0 4px 16px rgba(5, 88, 212, 0.06);
+}
+
+.admin-code-card__header {
+  cursor: pointer;
+  padding: 0.85rem 1rem;
+  list-style: none;
+  user-select: none;
+  transition: background 0.15s ease;
+}
+
+.admin-code-card__header::-webkit-details-marker {
+  display: none;
+}
+
+.admin-code-card__header:hover {
+  background: #f1f5f9;
+}
+
+.admin-code-card__top {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.25rem;
+}
+
+.admin-code-card__code {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #0558d4;
+  letter-spacing: 0.04em;
+}
+
+.admin-code-card__body {
+  padding: 0 1rem 1rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+/* Student activity cards */
+.admin-student-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.admin-student-card {
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  overflow: hidden;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.admin-student-card[open] {
+  border-color: #93c5fd;
+  box-shadow: 0 4px 16px rgba(5, 88, 212, 0.08);
+}
+
+.admin-student-card__header {
+  cursor: pointer;
+  padding: 0.85rem 1rem;
+  list-style: none;
+  user-select: none;
+  transition: background 0.15s ease;
+}
+
+.admin-student-card__header::-webkit-details-marker {
+  display: none;
+}
+
+.admin-student-card__header:hover {
+  background: #f8fafc;
+}
+
+.admin-student-card__identity {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.3rem;
+}
+
+.admin-student-card__name {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #0f172a;
+}
+
+.admin-student-badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+}
+
+.admin-student-badge--success {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.admin-student-badge--danger {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.admin-student-badge--info {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.admin-student-badge--warning {
+  background: #fef9c3;
+  color: #a16207;
+}
+
+.admin-student-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.admin-student-card__meta code {
+  font-size: 0.75rem;
+  color: #0558d4;
+}
+
+.admin-student-card__body {
+  padding: 0 1rem 1rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+.admin-student-card__section {
+  padding-top: 0.75rem;
+}
+
+.admin-student-card__section-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #94a3b8;
+  margin-bottom: 0.35rem;
+}
+
+.admin-student-card__uploads {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 1.25rem;
+}
+
+@media (max-width: 768px) {
+  .admin-student-card__uploads {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Chunk logs: summary line + expandable numbered list */
 .admin-chunk-log-subsection {
   border: 1px solid #e2e8f0;
