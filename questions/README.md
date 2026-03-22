@@ -12,7 +12,7 @@ This will:
 
 1. Read **pages 1–2** only for duration / marks / title hints; **questions** are parsed from **page 3 through the second-to-last page** (last page is treated as blank).
 2. Parse each PDF with the same logic as the in-app parser (sections + question numbers).
-3. Write per-question JPEG crops to `public/questions/papers/<slug>/q-<N>.jpg`. Crops **exclude** inter-question lines such as `SECTION-C : …`, Part headers, and the standard “This section contains … Multiple Choice Questions” boilerplate so those do not appear inside question images.
+3. Write per-question JPEG crops to `public/questions/papers/<slug>/q-<N>.jpg`. Crops **exclude** inter-question lines such as `SECTION-C : …`, Part headers, and the standard “This section contains … Multiple Choice Questions” boilerplate so those do not appear inside question images. A generous pad is kept **below the last option marker (4)** so figures drawn under options (e.g. dice for (3)/(4)) are not clipped; re-run this command after changing crop logic in `scripts/lib/pdfQuestionImagesNode.mjs`.
 4. Write `public/questions/papers/<slug>/paper.json` (no answer keys).
 5. Update `public/questions/papers-index.json` (default **display names** = PDF file name; **active** paper = first file unless you change it).
 

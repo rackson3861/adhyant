@@ -119,6 +119,169 @@ function fileNameStudentRecording(metadata) {
   return truncateDriveName(studentNameMobileTagFromMetadata(metadata) + '_recording.webm', DRIVE_LABEL_MAX_LEN);
 }
 
+/** TestSubmissions sheet: submission key is column Q (17) → 0-based index 16. */
+function findSubmissionRowBySubmissionKey_(submissionKey) {
+  var k = String(submissionKey || '').trim();
+  if (!k) return -1;
+  var sheet = getOrCreateTestSubmissionsSheet();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return -1;
+  var numCols = Math.max(20, sheet.getLastColumn());
+  var rows = sheet.getRange(2, 1, lastRow, numCols).getValues();
+  var ri;
+  for (ri = 0; ri < rows.length; ri++) {
+    if (String(rows[ri][16] || '').trim() === k) {
+      return ri + 2;
+    }
+  }
+  return -1;
+}
+
+function markTestSessionSubmittedFromChunked_(testCode, studentEmail) {
+  try {
+    var code = String(testCode || '').trim().toUpperCase();
+    var em = String(studentEmail || '').trim().toLowerCase();
+    if (!code || !em) return;
+    var sessionsSheet = getOrCreateTestSessionsSheet();
+    var sData = sessionsSheet.getDataRange().getValues();
+    for (var si = 1; si < sData.length; si++) {
+      if (String(sData[si][0]).trim().toUpperCase() === code &&
+          String(sData[si][1]).trim().toLowerCase() === em) {
+        sessionsSheet.getRange(si + 1, 5).setValue('submitted');
+        break;
+      }
+    }
+  } catch (_) {}
+}
+
+/**
+ * Chunked online test: periodic metadata snapshots + ~10 min video segments in one Drive folder / submissionKey.
+ * Legacy clients omit metadata.chunkedUpload — unchanged single end-of-test upload.
+ */
+function doPostSubmitChunkedTestMetadata_(data) {
+  var metadata = data.metadata || {};
+  var submissionKey = (data.submissionKey || '').toString().trim();
+  if (!submissionKey) {
+    submissionKey = Utilities.getUuid().replace(/-/g, '').slice(0, 20);
+  }
+  var phase = String(metadata.chunkPhase || 'periodic').toLowerCase();
+  var testCode = (metadata.testCode || '').toString().trim().toUpperCase();
+  var secMeta = normalizeMetadataStudentKey_(metadata.secondaryCode || '');
+  var gateMeta = gatePasscodeFromMetadata_(metadata);
+  var snapRaw = (metadata.snapshotFileName || 'metadata_snapshot.json').toString();
+  if (snapRaw.indexOf('/') >= 0 || snapRaw.indexOf('\\') >= 0) snapRaw = 'metadata_snapshot.json';
+  var snapName = truncateDriveName(snapRaw, DRIVE_LABEL_MAX_LEN);
+  var timestamp = Utilities.formatDate(new Date(), 'Asia/Kolkata', 'yyyy-MM-dd_HH-mm-ss');
+  var sheet = getOrCreateTestSubmissionsSheet();
+  var rowNum = findSubmissionRowBySubmissionKey_(submissionKey);
+  var sessionFolder = null;
+  var metaBlob = Utilities.newBlob(JSON.stringify(metadata, null, 2), 'application/json', snapName);
+
+  if (rowNum < 2) {
+    if (phase === 'final') {
+      var folderLabelF = buildOnlineTestSessionFolderLabel(metadata, submissionKey);
+      var rootF = getOrCreateOnlineTestUploadsRootFolder();
+      var studentFolderF = getOrCreateChildFolder(rootF, studentNameMobileTagFromMetadata(metadata));
+      sessionFolder = getOrCreateChildFolder(studentFolderF, folderLabelF);
+      var metaFileF = sessionFolder.createFile(metaBlob);
+      sheet.appendRow([
+        timestamp,
+        metadata.studentName || '',
+        metadata.studentEmail || '',
+        metadata.studentAdhar || '',
+        metadata.studentPhone || '',
+        scoreDisplayForSubmissionRow(metadata),
+        metadata.totalQuestions != null ? metadata.totalQuestions : '',
+        metadata.isMobile === true ? 'Yes' : 'No',
+        metadata.events ? JSON.stringify(metadata.events) : '',
+        '',
+        fileNameStudentRecording(metadata),
+        '',
+        'metadata_uploaded',
+        '',
+        testCode,
+        metaFileF.getId(),
+        submissionKey,
+        sessionFolder.getId(),
+        secMeta,
+        gateMeta
+      ]);
+      markTestSessionSubmittedFromChunked_(testCode, metadata.studentEmail);
+      appendMetadataChunkLogLine_(sheet, sheet.getLastRow(), metadata.segmentIndex, snapName, true);
+      notifyChunkedMetadataChunkEmail_(metadata, submissionKey, snapName, sessionFolder.getId(), 'final');
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        message: 'Final metadata saved',
+        submissionKey: submissionKey,
+        folderId: sessionFolder.getId()
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    var folderLabel = buildOnlineTestSessionFolderLabel(metadata, submissionKey);
+    var root = getOrCreateOnlineTestUploadsRootFolder();
+    var studentFolder = getOrCreateChildFolder(root, studentNameMobileTagFromMetadata(metadata));
+    sessionFolder = getOrCreateChildFolder(studentFolder, folderLabel);
+    var metaCreated = sessionFolder.createFile(metaBlob);
+    sheet.appendRow([
+      timestamp,
+      metadata.studentName || '',
+      metadata.studentEmail || '',
+      metadata.studentAdhar || '',
+      metadata.studentPhone || '',
+      scoreDisplayForSubmissionRow(metadata),
+      metadata.totalQuestions != null ? metadata.totalQuestions : '',
+      metadata.isMobile === true ? 'Yes' : 'No',
+      metadata.events ? JSON.stringify(metadata.events) : '',
+        '',
+        '',
+        '',
+        'chunked_open',
+        '',
+        testCode,
+        metaCreated.getId(),
+        submissionKey,
+        sessionFolder.getId(),
+        secMeta,
+        gateMeta
+    ]);
+    appendMetadataChunkLogLine_(sheet, sheet.getLastRow(), metadata.segmentIndex, snapName, false);
+    notifyChunkedMetadataChunkEmail_(metadata, submissionKey, snapName, sessionFolder.getId(), 'session_start');
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'success',
+      message: 'Chunk session opened',
+      submissionKey: submissionKey,
+      folderId: sessionFolder.getId()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  var folderId = String(sheet.getRange(rowNum, 18).getValue() || '').trim();
+  try {
+    sessionFolder = DriveApp.getFolderById(folderId);
+  } catch (eFolder) {
+    return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Session folder missing' })).setMimeType(ContentService.MimeType.JSON);
+  }
+  sessionFolder.createFile(metaBlob);
+  appendMetadataChunkLogLine_(sheet, rowNum, metadata.segmentIndex, snapName, phase === 'final');
+
+  if (phase === 'final') {
+    markTestSessionSubmittedFromChunked_(testCode, metadata.studentEmail);
+    sheet.getRange(rowNum, 5).setValue(scoreDisplayForSubmissionRow(metadata));
+    sheet.getRange(rowNum, 6).setValue(metadata.totalQuestions != null ? metadata.totalQuestions : '');
+    sheet.getRange(rowNum, 7).setValue(metadata.isMobile === true ? 'Yes' : 'No');
+    sheet.getRange(rowNum, 8).setValue(metadata.events ? JSON.stringify(metadata.events) : '');
+    if (sheet.getLastColumn() < 14) sheet.getRange(1, 14).setValue('Upload error').setFontWeight('bold');
+    sheet.getRange(rowNum, 13).setValue('metadata_uploaded');
+    notifyChunkedMetadataChunkEmail_(metadata, submissionKey, snapName, folderId, 'final');
+  } else {
+    notifyChunkedMetadataChunkEmail_(metadata, submissionKey, snapName, folderId, 'periodic');
+  }
+
+  return ContentService.createTextOutput(JSON.stringify({
+    status: 'success',
+    message: phase === 'final' ? 'Final snapshot saved' : 'Periodic snapshot saved',
+    submissionKey: submissionKey
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
 // Main function to handle POST requests
 function doPost(e) {
   try {
@@ -388,6 +551,106 @@ function countTestCodesUsingPaperId_(paperId) {
   var i;
   for (i = 0; i < data.length; i++) {
     if (String(data[i][3] || '').trim() === pid) n++;
+  }
+  return n;
+}
+
+/**
+ * Duration (minutes) for a question paper row by id (col F / index 5). Default 120.
+ */
+function getQuestionPaperDurationMinutesById_(paperId) {
+  var want = String(paperId || '').trim();
+  if (!want) return 120;
+  var sheet = getOrCreateQuestionPapersSheet();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return 120;
+  var numCols = Math.max(8, sheet.getLastColumn());
+  var data = sheet.getRange(2, 1, lastRow, numCols).getValues();
+  var i;
+  for (i = 0; i < data.length; i++) {
+    if (String(data[i][0]).trim() === want) {
+      var dm = data[i][5];
+      if (dm !== null && dm !== undefined && dm !== '') {
+        var n = Number(dm);
+        if (!isNaN(n) && n > 0) return Math.min(600, n);
+      }
+      return 120;
+    }
+  }
+  return 120;
+}
+
+/**
+ * Exam duration for a primary test code: follow TestCodes → QuestionPaperId → papers sheet.
+ */
+function getDurationMinutesForPrimaryTestCode_(testCode) {
+  var code = String(testCode || '').trim().toUpperCase();
+  if (!code) return 120;
+  var sheet = getOrCreateTestCodesSheet();
+  var last = sheet.getLastRow();
+  if (last < 2) return 120;
+  var numCols = Math.max(8, sheet.getLastColumn());
+  var data = sheet.getRange(2, 1, last, numCols).getValues();
+  var i;
+  for (i = 0; i < data.length; i++) {
+    if (String(data[i][0] || '').trim().toUpperCase() === code) {
+      var paperId = data[i].length >= 4 && data[i][3] != null ? String(data[i][3]).trim() : '';
+      return getQuestionPaperDurationMinutesById_(paperId);
+    }
+  }
+  return 120;
+}
+
+/**
+ * StartedAt cell: Date from Sheets or yyyy-MM-dd HH:mm:ss string (stored as IST).
+ * @returns {number} epoch ms or NaN
+ */
+function sessionStartedToMillis_(startedRaw) {
+  if (startedRaw instanceof Date && !isNaN(startedRaw.getTime())) {
+    return startedRaw.getTime();
+  }
+  var s = String(startedRaw || '').trim();
+  if (!s) return NaN;
+  try {
+    var d = Utilities.parseDate(s, 'Asia/Kolkata', 'yyyy-MM-dd HH:mm:ss');
+    return d.getTime();
+  } catch (e) {
+    return NaN;
+  }
+}
+
+/**
+ * Client auto-submit calls the server only if the browser stays open through metadata upload.
+ * Stale in_progress rows (browser closed at timeout, crash, etc.) are marked timed_out when an admin
+ * refreshes activity — after exam duration + grace minutes from StartedAt.
+ * @returns {number} rows updated
+ */
+function expireStaleInProgressSessionsForTestCode_(testCode) {
+  var code = String(testCode || '').trim().toUpperCase();
+  if (!code) return 0;
+  var durationMin = getDurationMinutesForPrimaryTestCode_(code);
+  /** Extra time after timer for student to reach result screen + metadata/video upload */
+  var graceMin = 45;
+  var limitMs = (durationMin + graceMin) * 60 * 1000;
+  var now = new Date().getTime();
+  var sessionsSheet = getOrCreateTestSessionsSheet();
+  var last = sessionsSheet.getLastRow();
+  if (last < 2) return 0;
+  var nCol = Math.max(10, sessionsSheet.getLastColumn());
+  var data = sessionsSheet.getRange(2, 1, last, nCol).getValues();
+  var n = 0;
+  var i;
+  for (i = 0; i < data.length; i++) {
+    if (String(data[i][0] || '').trim().toUpperCase() !== code) continue;
+    if (String(data[i][4] || '').trim().toLowerCase() !== 'in_progress') continue;
+    var startMs = sessionStartedToMillis_(data[i][3]);
+    if (isNaN(startMs)) continue;
+    if (now - startMs <= limitMs) continue;
+    sessionsSheet.getRange(i + 2, 5).setValue('timed_out');
+    n++;
+  }
+  if (n > 0) {
+    SpreadsheetApp.flush();
   }
   return n;
 }
@@ -824,6 +1087,9 @@ function doPostSubmitTestMetadata(data) {
   var lastRow;
   try {
     var metadata = data.metadata || {};
+    if (metadata.chunkedUpload === true) {
+      return doPostSubmitChunkedTestMetadata_(data);
+    }
     var submissionKey = (data.submissionKey || '').toString().trim();
     if (!submissionKey) {
       submissionKey = Utilities.getUuid().replace(/-/g, '').slice(0, 20);
@@ -924,8 +1190,13 @@ function doPostSubmitTestVideo(data) {
     }
 
     var metaMin = data.metadata || {};
+    var chunkedVid = data.chunkedUpload === true;
+    var isLastChunk = data.isLastChunk === true;
+    var segIxVid = -1;
     var videoBytes = Utilities.base64Decode(videoBase64);
-    var recName = fileNameStudentRecording(metaMin);
+    var nameFromClient = (data.videoFileName || '').toString().trim();
+    if (nameFromClient.indexOf('/') >= 0 || nameFromClient.indexOf('\\') >= 0) nameFromClient = '';
+    var recName = nameFromClient ? truncateDriveName(nameFromClient, DRIVE_LABEL_MAX_LEN) : fileNameStudentRecording(metaMin);
     var videoBlob = Utilities.newBlob(videoBytes, 'video/webm', recName);
 
     sheet = getOrCreateTestSubmissionsSheet();
@@ -992,8 +1263,19 @@ function doPostSubmitTestVideo(data) {
       sheet.getRange(found, 10).setValue(fileId);
       sheet.getRange(found, 11).setValue(recName);
       sheet.getRange(found, 12).setValue(fileSizeBytes);
-      sheet.getRange(found, 13).setValue('uploaded');
-      if (sheet.getLastColumn() >= 14) sheet.getRange(found, 14).setValue('');
+      if (chunkedVid && !isLastChunk) {
+        sheet.getRange(found, 13).setValue('chunked_partial');
+        if (sheet.getLastColumn() >= 14) sheet.getRange(found, 14).setValue('');
+      } else {
+        sheet.getRange(found, 13).setValue('uploaded');
+        if (sheet.getLastColumn() >= 14) sheet.getRange(found, 14).setValue('');
+      }
+      if (chunkedVid && found > 0) {
+        var segIxRaw = data.chunkSegmentIndex;
+        segIxVid = parseInt(String(segIxRaw != null ? segIxRaw : ''), 10);
+        if (isNaN(segIxVid)) segIxVid = -1;
+        appendChunkUploadLogLine_(sheet, found, segIxVid, recName, isLastChunk);
+      }
       var secVid = normalizeMetadataStudentKey_(metaMin.secondaryCode || '');
       if (secVid && sheet.getLastColumn() >= 19) {
         var curS = String(sheet.getRange(found, 19).getValue() || '').trim();
@@ -1031,6 +1313,28 @@ function doPostSubmitTestVideo(data) {
         secOrphan,
         gateOrphan
       ]);
+    }
+
+    if (chunkedVid) {
+      var folderIdEmail = '';
+      if (found > 0) {
+        try {
+          folderIdEmail = String(sheet.getRange(found, 18).getValue() || '').trim();
+        } catch (eMailFolder) {}
+      }
+      if (!folderIdEmail && folder) folderIdEmail = folder.getId();
+      var tcVid = (metaMin.testCode || '').toString().trim().toUpperCase() || '—';
+      notifyChunkedVideoChunkEmail_(
+        metaMin,
+        submissionKey,
+        recName,
+        fileId,
+        fileSizeBytes,
+        isLastChunk,
+        folderIdEmail,
+        tcVid,
+        segIxVid
+      );
     }
 
     return ContentService.createTextOutput(JSON.stringify({
@@ -1167,6 +1471,96 @@ function sendTestNotificationEmails(subject, body) {
   }
 }
 
+/** Email admins for each chunked metadata JSON saved (session start, periodic, or final). */
+function notifyChunkedMetadataChunkEmail_(metadata, submissionKey, snapName, folderId, kind) {
+  var name = (metadata.studentName || 'Unknown').toString();
+  var em = (metadata.studentEmail || '—').toString();
+  var code = (metadata.testCode || '').toString().trim().toUpperCase() || '—';
+  var seg = metadata.segmentIndex != null && metadata.segmentIndex !== '' ? String(metadata.segmentIndex) : '—';
+  var label =
+    kind === 'final' ? 'FINAL metadata snapshot' : kind === 'session_start' ? 'Session started (first metadata)' : 'Periodic metadata snapshot';
+  var subj = 'Adhyant: [' + label + '] ' + name + ' · ' + code;
+  var body =
+    'Chunked test — metadata JSON saved on Drive\n\n' +
+    'Type         : ' +
+    label +
+    '\n' +
+    'File         : ' +
+    (snapName || '—') +
+    '\n' +
+    'Segment idx  : ' +
+    seg +
+    '\n' +
+    'Student      : ' +
+    name +
+    '\n' +
+    'Email        : ' +
+    em +
+    '\n' +
+    'Test code    : ' +
+    code +
+    '\n' +
+    'Submission   : ' +
+    submissionKey +
+    '\n' +
+    'Folder ID    : ' +
+    (folderId || '—') +
+    '\n';
+  try {
+    sendTestNotificationEmails(subj, body);
+  } catch (e) {
+    Logger.log('notifyChunkedMetadataChunkEmail_: ' + e.toString());
+  }
+}
+
+/** Email admins for each chunked video segment saved (partial or final). */
+function notifyChunkedVideoChunkEmail_(metaMin, submissionKey, recName, fileId, sizeBytes, isFinal, folderId, testCode, segmentIndex) {
+  var name = (metaMin.studentName || 'Unknown').toString();
+  var em = (metaMin.studentEmail || '—').toString();
+  var segStr =
+    segmentIndex != null && !isNaN(Number(segmentIndex)) && Number(segmentIndex) >= 0 ? String(Number(segmentIndex)) : '—';
+  var label = isFinal ? 'FINAL video chunk' : 'Partial video chunk';
+  var subj = 'Adhyant: [' + label + '] ' + name + ' · ' + (testCode || '—');
+  var sizeMb = sizeBytes != null && !isNaN(Number(sizeBytes)) ? (Number(sizeBytes) / (1024 * 1024)).toFixed(2) + ' MB' : '—';
+  var body =
+    'Chunked test — recording segment saved on Drive\n\n' +
+    'Type         : ' +
+    label +
+    '\n' +
+    'File         : ' +
+    (recName || '—') +
+    '\n' +
+    'Segment idx  : ' +
+    segStr +
+    '\n' +
+    'Size         : ' +
+    sizeMb +
+    '\n' +
+    'File ID      : ' +
+    (fileId || '—') +
+    '\n' +
+    'Student      : ' +
+    name +
+    '\n' +
+    'Email        : ' +
+    em +
+    '\n' +
+    'Test code    : ' +
+    (testCode || '—') +
+    '\n' +
+    'Submission   : ' +
+    submissionKey +
+    '\n' +
+    'Folder ID    : ' +
+    (folderId || '—') +
+    '\n';
+  try {
+    sendTestNotificationEmails(subj, body);
+  } catch (e) {
+    Logger.log('notifyChunkedVideoChunkEmail_: ' + e.toString());
+  }
+}
+
 /**
  * Handle sign-up for test (online or offline): store in TestSignUps sheet.
  * Expects JSON: { action: 'testSignUp', fullName, email, phone, studentClass?, testType: 'online'|'offline', testDate, message? }
@@ -1251,7 +1645,97 @@ function getOrCreateTestSubmissionsSheet() {
   if (sheet.getLastColumn() < 20 || !String(sheet.getRange(1, 20).getValue() || '').trim()) {
     sheet.getRange(1, 20).setValue('Gate passcode').setFontWeight('bold');
   }
+  if (sheet.getLastColumn() < 21 || !String(sheet.getRange(1, 21).getValue() || '').trim()) {
+    sheet.getRange(1, 21).setValue('Video chunk log').setFontWeight('bold');
+  }
+  if (sheet.getLastColumn() < 22 || !String(sheet.getRange(1, 22).getValue() || '').trim()) {
+    sheet.getRange(1, 22).setValue('Metadata chunk log').setFontWeight('bold');
+  }
   return sheet;
+}
+
+/** Append one line to col 21 — video .webm chunks (chunked exams). */
+function appendChunkUploadLogLine_(sheet, rowNum, segmentIndex, fileName, isFinalChunk) {
+  if (!sheet || rowNum < 2) return;
+  if (sheet.getLastColumn() < 21) {
+    sheet.getRange(1, 21).setValue('Video chunk log').setFontWeight('bold');
+  }
+  var at = Utilities.formatDate(new Date(), 'Asia/Kolkata', 'yyyy-MM-dd HH:mm:ss');
+  var segN = segmentIndex != null && !isNaN(Number(segmentIndex)) ? (Number(segmentIndex) + 1) : '?';
+  var base = String(fileName || '').slice(0, 150);
+  var line = 'Seg ' + segN + ': ' + base + ' @ ' + at + (isFinalChunk ? ' [final]' : ' [partial]');
+  var cur = String(sheet.getRange(rowNum, 21).getValue() || '').trim();
+  var next = cur ? (cur + '\n' + line) : line;
+  if (next.length > 48000) {
+    next = '…(truncated)…\n' + next.slice(next.length - 47000);
+  }
+  sheet.getRange(rowNum, 21).setValue(next);
+}
+
+/** Append one line to col 22 — JSON metadata snapshot files (chunked exams). */
+function appendMetadataChunkLogLine_(sheet, rowNum, segmentIndex, fileName, isFinalChunk) {
+  if (!sheet || rowNum < 2) return;
+  if (sheet.getLastColumn() < 22) {
+    sheet.getRange(1, 22).setValue('Metadata chunk log').setFontWeight('bold');
+  }
+  var at = Utilities.formatDate(new Date(), 'Asia/Kolkata', 'yyyy-MM-dd HH:mm:ss');
+  var segN = segmentIndex != null && !isNaN(Number(segmentIndex)) ? (Number(segmentIndex) + 1) : '?';
+  var base = String(fileName || '').slice(0, 150);
+  var line = 'Meta seg ' + segN + ': ' + base + ' @ ' + at + (isFinalChunk ? ' [final]' : ' [partial]');
+  var cur = String(sheet.getRange(rowNum, 22).getValue() || '').trim();
+  var next = cur ? (cur + '\n' + line) : line;
+  if (next.length > 48000) {
+    next = '…(truncated)…\n' + next.slice(next.length - 47000);
+  }
+  sheet.getRange(rowNum, 22).setValue(next);
+}
+
+/** Build summaries for admin UI from raw chunk log cell text (cols 21–22). */
+function chunkLogSummariesFromRaw_(videoChunkLog, metadataChunkLog) {
+  var v = String(videoChunkLog || '');
+  var m = String(metadataChunkLog || '');
+  var chLines = v ? v.split('\n').filter(function (ln) { return String(ln).trim() !== ''; }) : [];
+  var metaLines = m ? m.split('\n').filter(function (ln) { return String(ln).trim() !== ''; }) : [];
+  var chSummary = '';
+  if (chLines.length > 0) {
+    chSummary = chLines.length + ' video chunk(s); latest: ' + String(chLines[chLines.length - 1]).slice(0, 160);
+  }
+  var metaSummary = '';
+  if (metaLines.length > 0) {
+    metaSummary = metaLines.length + ' metadata snapshot(s); latest: ' + String(metaLines[metaLines.length - 1]).slice(0, 160);
+  }
+  return {
+    videoChunkLog: v ? v : null,
+    metadataChunkLog: m ? m : null,
+    chunkUploadLog: v ? v : null,
+    chunkSummary: chSummary ? chSummary : null,
+    metadataChunkSummary: metaSummary ? metaSummary : null,
+    chunkSegmentCount: chLines.length,
+    metadataChunkCount: metaLines.length
+  };
+}
+
+/**
+ * In-progress / timed-out students: pull chunk log columns from their open submission row
+ * (same test code + session email on TestSubmissions).
+ */
+function attachChunkLogsFromSubmissions_(subData, codeUpper, emailNorm) {
+  var bestV = '';
+  var bestM = '';
+  var ei;
+  for (ei = 0; ei < subData.length; ei++) {
+    var row = subData[ei];
+    if (String(row[14] || '').trim().toUpperCase() !== codeUpper) continue;
+    var sec = row.length >= 19 ? String(row[18] || '').trim().toLowerCase() : '';
+    if (sec !== emailNorm) continue;
+    var st = String(row[12] || '').trim().toLowerCase();
+    if (st !== 'chunked_open' && st !== 'chunked_partial' && st !== 'metadata_uploaded' && st !== 'uploaded') continue;
+    var vv = row.length >= 21 ? String(row[20] != null ? row[20] : '') : '';
+    var mm = row.length >= 22 ? String(row[21] != null ? row[21] : '') : '';
+    if (vv.length >= bestV.length) bestV = vv;
+    if (mm.length >= bestM.length) bestM = mm;
+  }
+  return chunkLogSummariesFromRaw_(bestV, bestM);
 }
 
 /** Normalize email for gate / submission identity (lowercase). */
@@ -1820,7 +2304,7 @@ function doGet(e) {
       if (lastRow < 2) {
         return ContentService.createTextOutput(JSON.stringify({ status: 'success', submissions: [], total: 0 })).setMimeType(ContentService.MimeType.JSON);
       }
-      var numCols = Math.max(18, sheet.getLastColumn());
+      var numCols = Math.max(22, sheet.getLastColumn());
       var data = sheet.getRange(2, 1, lastRow, numCols).getValues();
       var dataFiltered = data.filter(function (row) {
         var first = row[0];
@@ -1845,6 +2329,20 @@ function doGet(e) {
         var metadataFileIdVal = (row.length > 15 && row[15] != null) ? String(row[15]) : '';
         var submissionKeyVal = (row.length > 16 && row[16] != null) ? String(row[16]) : '';
         var driveFolderIdVal = (row.length > 17 && row[17] != null) ? String(row[17]) : '';
+        var videoChunkLogVal = (row.length > 20 && row[20] != null) ? String(row[20]) : '';
+        var metadataChunkLogVal = (row.length > 21 && row[21] != null) ? String(row[21]) : '';
+        var chunkLines = videoChunkLogVal ? videoChunkLogVal.split('\n').filter(function (ln) { return String(ln).trim() !== ''; }) : [];
+        var metaLines = metadataChunkLogVal ? metadataChunkLogVal.split('\n').filter(function (ln) { return String(ln).trim() !== ''; }) : [];
+        var chunkCount = chunkLines.length;
+        var metaChunkCount = metaLines.length;
+        var chunkSummary = '';
+        if (chunkCount > 0) {
+          chunkSummary = chunkCount + ' video segment(s); latest: ' + String(chunkLines[chunkLines.length - 1]).slice(0, 200);
+        }
+        var metadataChunkSummary = '';
+        if (metaChunkCount > 0) {
+          metadataChunkSummary = metaChunkCount + ' metadata file(s); latest: ' + String(metaLines[metaLines.length - 1]).slice(0, 200);
+        }
         return {
           timestamp: row[0],
           studentName: row[1],
@@ -1863,7 +2361,14 @@ function doGet(e) {
           testCode: testCodeVal,
           metadataFileId: metadataFileIdVal,
           submissionKey: submissionKeyVal,
-          driveFolderId: driveFolderIdVal
+          driveFolderId: driveFolderIdVal,
+          chunkUploadLog: videoChunkLogVal,
+          videoChunkLog: videoChunkLogVal,
+          metadataChunkLog: metadataChunkLogVal,
+          chunkSegmentCount: chunkCount,
+          metadataChunkCount: metaChunkCount,
+          chunkSummary: chunkSummary,
+          metadataChunkSummary: metadataChunkSummary
         };
       });
       return ContentService.createTextOutput(JSON.stringify({ status: 'success', submissions: submissions, total: submissions.length })).setMimeType(ContentService.MimeType.JSON);
@@ -2407,42 +2912,75 @@ function doGet(e) {
       if (!code) {
         return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Code required' })).setMimeType(ContentService.MimeType.JSON);
       }
+      /** Mark in_progress rows past exam duration + upload grace (browser may never have called submit). */
+      var staleClosed = expireStaleInProgressSessionsForTestCode_(code);
       var inProgress = [];
+      var timedOut = [];
+      var subSheetEarly = getOrCreateTestSubmissionsSheet();
+      var subLastEarly = subSheetEarly.getLastRow();
+      var numColsEarly = Math.max(22, subSheetEarly.getLastColumn());
+      var subData = subLastEarly >= 2 ? subSheetEarly.getRange(2, 1, subLastEarly, numColsEarly).getValues() : [];
       var sessionsSheet = getOrCreateTestSessionsSheet();
       var sLast = sessionsSheet.getLastRow();
       if (sLast >= 2) {
         var sCols = Math.max(10, sessionsSheet.getLastColumn());
         var sData = sessionsSheet.getRange(2, 1, sLast, sCols).getValues();
         for (var si = 0; si < sData.length; si++) {
-          if (String(sData[si][0]).trim().toUpperCase() === code && String(sData[si][4]).trim().toLowerCase() === 'in_progress') {
-            var secProg = sData[si].length >= 6 && sData[si][5] != null ? String(sData[si][5]).trim() : '';
-            var classProg = sData[si].length >= 7 && sData[si][6] != null ? String(sData[si][6]).trim() : '';
-            var resumePwProg = sData[si].length >= 9 && sData[si][8] != null ? String(sData[si][8]).trim() : '';
-            var gateProg = sData[si].length >= 10 && sData[si][9] != null ? String(sData[si][9]).trim() : '';
-            inProgress.push({
-              email: String(sData[si][1]).trim(),
-              name: String(sData[si][2]).trim(),
-              startedAt: sData[si][3] != null ? String(sData[si][3]) : '',
-              secondaryCode: secProg || null,
-              gatePasscode: gateProg || null,
-              studentClass: classProg || null,
-              resumePassword: resumePwProg || null
-            });
+          if (String(sData[si][0]).trim().toUpperCase() !== code) continue;
+          var stRow = String(sData[si][4]).trim().toLowerCase();
+          var secProg = sData[si].length >= 6 && sData[si][5] != null ? String(sData[si][5]).trim() : '';
+          var classProg = sData[si].length >= 7 && sData[si][6] != null ? String(sData[si][6]).trim() : '';
+          var resumePwProg = sData[si].length >= 9 && sData[si][8] != null ? String(sData[si][8]).trim() : '';
+          var gateProg = sData[si].length >= 10 && sData[si][9] != null ? String(sData[si][9]).trim() : '';
+          var emailNormAct = normalizeGateEmail_(String(sData[si][1]).trim());
+          var chunkAttach = emailNormAct ? attachChunkLogsFromSubmissions_(subData, code, emailNormAct) : chunkLogSummariesFromRaw_('', '');
+          var rowObj = {
+            email: String(sData[si][1]).trim(),
+            name: String(sData[si][2]).trim(),
+            startedAt: sData[si][3] != null ? String(sData[si][3]) : '',
+            secondaryCode: secProg || null,
+            gatePasscode: gateProg || null,
+            studentClass: classProg || null,
+            resumePassword: resumePwProg || null,
+            videoChunkLog: chunkAttach.videoChunkLog,
+            metadataChunkLog: chunkAttach.metadataChunkLog,
+            chunkUploadLog: chunkAttach.chunkUploadLog,
+            chunkSummary: chunkAttach.chunkSummary,
+            metadataChunkSummary: chunkAttach.metadataChunkSummary,
+            chunkSegmentCount: chunkAttach.chunkSegmentCount,
+            metadataChunkCount: chunkAttach.metadataChunkCount
+          };
+          if (stRow === 'in_progress') {
+            inProgress.push(rowObj);
+          } else if (stRow === 'timed_out') {
+            timedOut.push(rowObj);
           }
         }
       }
       var submissions = [];
-      var subSheet = getOrCreateTestSubmissionsSheet();
-      var subLast = subSheet.getLastRow();
-      var numCols = Math.max(20, subSheet.getLastColumn());
+      var subSheet = subSheetEarly;
+      var subLast = subLastEarly;
+      var numCols = numColsEarly;
       if (subLast >= 2) {
-        var subData = subSheet.getRange(2, 1, subLast, numCols).getValues();
         for (var ri = 0; ri < subData.length; ri++) {
           var row = subData[ri];
           var rowCode = (row.length >= 15 && row[14] != null && row[14] !== '') ? String(row[14]).trim().toUpperCase() : '';
           if (rowCode === code) {
             var secSub = row.length >= 19 && row[18] != null ? String(row[18]).trim() : '';
             var gateSub = row.length >= 20 && row[19] != null ? String(row[19]).trim() : '';
+            var vStat = row.length >= 13 && row[12] != null ? String(row[12]).trim() : '';
+            var videoChunkLog = row.length >= 21 && row[20] != null ? String(row[20]) : '';
+            var metadataChunkLog = row.length >= 22 && row[21] != null ? String(row[21]) : '';
+            var chLines = videoChunkLog ? videoChunkLog.split('\n').filter(function (ln) { return String(ln).trim() !== ''; }) : [];
+            var metaLines = metadataChunkLog ? metadataChunkLog.split('\n').filter(function (ln) { return String(ln).trim() !== ''; }) : [];
+            var chSummary = '';
+            if (chLines.length > 0) {
+              chSummary = chLines.length + ' video chunk(s); latest: ' + String(chLines[chLines.length - 1]).slice(0, 160);
+            }
+            var metaSummary = '';
+            if (metaLines.length > 0) {
+              metaSummary = metaLines.length + ' metadata snapshot(s); latest: ' + String(metaLines[metaLines.length - 1]).slice(0, 160);
+            }
             submissions.push({
               studentName: row[1] != null ? String(row[1]) : '',
               email: row[2] != null ? String(row[2]) : '',
@@ -2450,7 +2988,15 @@ function doGet(e) {
               total: row[6] != null ? row[6] : '',
               timestamp: row[0] != null ? String(row[0]) : '',
               secondaryCode: secSub || null,
-              gatePasscode: gateSub || null
+              gatePasscode: gateSub || null,
+              videoStatus: vStat || null,
+              chunkUploadLog: videoChunkLog || null,
+              videoChunkLog: videoChunkLog || null,
+              metadataChunkLog: metadataChunkLog || null,
+              chunkSegmentCount: chLines.length,
+              metadataChunkCount: metaLines.length,
+              chunkSummary: chSummary || null,
+              metadataChunkSummary: metaSummary || null
             });
           }
         }
@@ -2459,6 +3005,8 @@ function doGet(e) {
         status: 'success',
         code: code,
         inProgress: inProgress,
+        timedOut: timedOut,
+        staleSessionsClosedOnRefresh: staleClosed,
         submissions: submissions
       })).setMimeType(ContentService.MimeType.JSON);
     } catch (err) {

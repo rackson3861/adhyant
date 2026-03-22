@@ -585,6 +585,8 @@ select.online-test-reg-input {
   flex: 1 1 0;
   min-width: 0;
   min-height: 400px;
+  /* Do not shrink below content — prevents flex from clipping tall question figures */
+  align-self: flex-start;
 }
 
 .online-test-sidebar-col {
@@ -802,14 +804,19 @@ select.online-test-reg-input {
   line-height: 1.4;
 }
 
+/* Never clip the figure: tall sheets (options 3–4 below the fold) must show in full */
 .online-test-question-image-wrap {
   position: relative;
   width: 100%;
   min-height: 120px;
   border-radius: 12px;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid #e2e8f0;
   background: #f8fafc;
+}
+
+.online-test-question-image-wrap.online-test-question-image-wrap--loaded {
+  overflow: visible;
 }
 
 .online-test-question-image-wrap--loaded .online-test-question-image-skeleton {
@@ -820,7 +827,9 @@ select.online-test-reg-input {
   position: absolute;
   inset: 0;
   z-index: 0;
+  min-height: 120px;
   border-radius: 10px;
+  overflow: hidden;
   background: linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 45%, #f1f5f9 90%);
   background-size: 220% 100%;
   animation: online-test-img-shimmer 1.15s ease-in-out infinite;
@@ -840,9 +849,9 @@ select.online-test-reg-input {
   z-index: 1;
   display: block;
   width: 100%;
-  max-height: min(75vh, 640px);
+  max-width: 100%;
   height: auto;
-  object-fit: contain;
+  max-height: none;
   image-rendering: auto;
   transition: opacity 0.2s ease;
 }
@@ -860,6 +869,7 @@ select.online-test-reg-input {
   margin-bottom: 1.25rem;
   padding-bottom: 0.25rem;
   border-bottom: 1px solid #e2e8f0;
+  overflow: visible;
 }
 
 .online-test-question-stem-block .online-test-question-text {
@@ -1199,6 +1209,10 @@ select.online-test-reg-input {
   gap: 0.75rem;
 }
 
+.online-test-timer--end {
+  margin-inline-start: auto;
+}
+
 .online-test-timer {
   padding: 0.4rem 0.75rem;
   border-radius: 8px;
@@ -1238,7 +1252,8 @@ select.online-test-reg-input {
   border-radius: 18px;
   box-shadow: 0 4px 24px rgba(2, 57, 151, 0.08), 0 0 0 1px rgba(2, 57, 151, 0.06);
   margin-bottom: 1.5rem;
-  overflow: hidden;
+  /* Allow tall stem images / multi-part figures to show fully (do not clip) */
+  overflow: visible;
 }
 
 .online-test-question-card::before {
@@ -1251,6 +1266,7 @@ select.online-test-reg-input {
 
 .online-test-question-body {
   padding: 1.5rem;
+  overflow: visible;
 }
 
 .online-test-question-meta {
@@ -1525,7 +1541,9 @@ select.online-test-reg-input {
   }
   .online-test-content-col {
     order: 1;
-    min-height: 0;
+    /* min-height: 0 would let flex shrink this column and clip tall question images */
+    min-height: min-content;
+    width: 100%;
   }
   .online-test-sidebar-col {
     order: 2;
@@ -1564,6 +1582,10 @@ select.online-test-reg-input {
     width: 100%;
   }
 
+  .online-test-timer--end {
+    margin-inline-start: 0;
+  }
+
   .online-test-meta-text {
     width: 100%;
     text-align: center;
@@ -1599,7 +1621,7 @@ select.online-test-reg-input {
   }
 
   .online-test-question-image {
-    max-height: min(52vh, 400px);
+    max-height: none;
   }
 
   .online-test-reg-card-body {
@@ -1658,6 +1680,41 @@ select.online-test-reg-input {
 
 .online-test-result-score-box {
   margin-bottom: 1.5rem;
+}
+
+.online-test-result-answered-summary {
+  margin: 1rem 0 1.25rem;
+  padding: 1rem 1.25rem;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%);
+  border: 1px solid #bfdbfe;
+}
+
+.online-test-result-answered-summary--compact {
+  margin: 0.75rem 0 1rem;
+  padding: 0.75rem 1rem;
+}
+
+.online-test-result-answered-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 0.35rem 0;
+}
+
+.online-test-result-answered-fraction {
+  font-size: 2.25rem;
+  font-weight: 800;
+  line-height: 1.1;
+  color: #023997;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.online-test-result-answered-summary--compact .online-test-result-answered-fraction {
+  font-size: 1.75rem;
 }
 
 .online-test-result-title {
@@ -1855,6 +1912,26 @@ select.online-test-reg-input {
   font-size: 1.05rem;
   line-height: 1.5;
   color: #334155;
+}
+
+.online-test-result-redirect-countdown {
+  display: block;
+  margin-top: 0.65rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.online-test-result-redirect-countdown-num {
+  display: inline-block;
+  min-width: 1.25em;
+  font-size: 1.35rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #023997;
+  padding: 0.1rem 0.35rem;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #eff6ff 0%, #e0f2fe 100%);
+  border: 1px solid #bfdbfe;
 }
 
 /* ========== Small phones: full-width controls & touch targets ========== */

@@ -26,12 +26,53 @@ import "/src/assets/css/adminDashboard.css";
 
 const ADMIN_SECRET = import.meta.env.VITE_ADMIN_SECRET || "";
 
+/** Expandable list of snapshot / segment lines (subsection under summary). */
+function AdminChunkLogSubsection({ title, summary, logText }) {
+  const lines = React.useMemo(() => {
+    if (typeof logText !== "string" || !String(logText).trim()) return [];
+    return String(logText)
+      .split(/\n/)
+      .map((l) => l.trim())
+      .filter(Boolean);
+  }, [logText]);
+  const sum = summary != null && String(summary).trim() ? String(summary).trim() : "";
+  if (!lines.length && !sum) {
+    return <span className="text-muted">—</span>;
+  }
+  return (
+    <div className="admin-chunk-log-subsection">
+      {sum ? <div className="text-muted small mb-1">{sum}</div> : null}
+      {lines.length > 0 ? (
+        <details className="admin-chunk-details small">
+          <summary className="admin-chunk-details-summary">
+            {title}{" "}
+            <span className="text-secondary fw-normal">({lines.length})</span>
+          </summary>
+          <ol className="admin-chunk-line-list mb-0 mt-2 ps-3">
+            {lines.map((ln, idx) => (
+              <li key={idx} className="text-break small">
+                {ln}
+              </li>
+            ))}
+          </ol>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
 /** Build rows for admin: gate passcode + email + activity (API returns gatePasscode per row when available). */
 function studentSessionRowsFromActivity(activity) {
   const ip = Array.isArray(activity?.inProgress) ? activity.inProgress : [];
+  const to = Array.isArray(activity?.timedOut) ? activity.timedOut : [];
   const sub = Array.isArray(activity?.submissions) ? activity.submissions : [];
   const rows = [];
   ip.forEach((s, i) => {
+    const vLogIp = typeof s.videoChunkLog === "string" ? s.videoChunkLog : typeof s.chunkUploadLog === "string" ? s.chunkUploadLog : "";
+    const mLogIp = typeof s.metadataChunkLog === "string" ? s.metadataChunkLog : "";
+    const chSumIp = s.chunkSummary ? String(s.chunkSummary) : "";
+    const metaSumIp = s.metadataChunkSummary ? String(s.metadataChunkSummary) : "";
+    const detailIp = [s.startedAt ? `Started ${s.startedAt}` : "", chSumIp, metaSumIp].filter(Boolean).join(" · ") || "—";
     rows.push({
       key: `p-${i}-${s.email}`,
       gatePasscode: s.gatePasscode || "—",
@@ -41,11 +82,60 @@ function studentSessionRowsFromActivity(activity) {
       email: s.email || "—",
       studentClass: s.studentClass || "—",
       status: "In progress",
-      detail: s.startedAt ? `Started ${s.startedAt}` : "—",
+      detail: detailIp,
+      metadataChunkLog: mLogIp,
+      videoChunkLog: vLogIp,
+      metadataChunkSummary: metaSumIp || undefined,
+      chunkSummary: chSumIp || undefined,
+    });
+  });
+  to.forEach((s, i) => {
+    const vLogTo = typeof s.videoChunkLog === "string" ? s.videoChunkLog : typeof s.chunkUploadLog === "string" ? s.chunkUploadLog : "";
+    const mLogTo = typeof s.metadataChunkLog === "string" ? s.metadataChunkLog : "";
+    const chSumTo = s.chunkSummary ? String(s.chunkSummary) : "";
+    const metaSumTo = s.metadataChunkSummary ? String(s.metadataChunkSummary) : "";
+    const detailPartsTo = [];
+    if (s.startedAt) {
+      detailPartsTo.push(
+        `Started ${s.startedAt} — session exceeded allowed time without a server submit (often browser closed); video/metadata may be missing.`
+      );
+    }
+    if (chSumTo) detailPartsTo.push(chSumTo);
+    if (metaSumTo) detailPartsTo.push(metaSumTo);
+    const detailTo = detailPartsTo.length ? detailPartsTo.join(" · ") : "—";
+    rows.push({
+      key: `t-${i}-${s.email}`,
+      gatePasscode: s.gatePasscode || "—",
+      sessionCode: s.secondaryCode || s.email || "—",
+      resumePassword: s.resumePassword || "—",
+      name: s.name || "—",
+      email: s.email || "—",
+      studentClass: s.studentClass || "—",
+      status: "Timed out",
+      detail: detailTo,
+      metadataChunkLog: mLogTo,
+      videoChunkLog: vLogTo,
+      metadataChunkSummary: metaSumTo || undefined,
+      chunkSummary: chSumTo || undefined,
     });
   });
   sub.forEach((s, i) => {
     const ts = s.timestamp != null ? String(s.timestamp) : "";
+    const vs = (s.videoStatus || "").toString().toLowerCase();
+    const examStillUploading =
+      vs === "chunked_partial" || vs === "chunked_open" || vs === "metadata_uploaded";
+    const statusLabel = examStillUploading ? "Recording (uploads ongoing)" : "Submitted";
+    const scorePart = s.score != null && s.total != null ? `Score ${s.score}/${s.total}` : "";
+    const videoSummary = s.chunkSummary ? String(s.chunkSummary) : "";
+    const metaSummary = s.metadataChunkSummary ? String(s.metadataChunkSummary) : "";
+    const detailParts = [
+      scorePart,
+      videoSummary,
+      metaSummary,
+      examStillUploading && s.videoStatus ? `Sheet status: ${s.videoStatus}` : "",
+    ].filter(Boolean);
+    const vLog = typeof s.videoChunkLog === "string" ? s.videoChunkLog : typeof s.chunkUploadLog === "string" ? s.chunkUploadLog : "";
+    const mLog = typeof s.metadataChunkLog === "string" ? s.metadataChunkLog : "";
     rows.push({
       key: `s-${i}-${s.email}-${ts}`,
       gatePasscode: s.gatePasscode || "—",
@@ -54,9 +144,11 @@ function studentSessionRowsFromActivity(activity) {
       name: s.studentName || "—",
       email: s.email || "—",
       studentClass: s.studentClass || "—",
-      status: "Submitted",
-      detail: s.score != null && s.total != null ? `Score ${s.score}/${s.total}` : "—",
+      status: statusLabel,
+      detail: detailParts.length ? detailParts.join(" · ") : "—",
       submissionTimestamp: ts,
+      metadataChunkLog: mLog,
+      videoChunkLog: vLog,
     });
   });
   return rows;
@@ -275,7 +367,15 @@ export default function AdminDashboard() {
       .then((r) => parseAppsScriptFetchResponse(r))
       .then((d) => {
         if (d.status === "success")
-          setCodeActivity((prev) => ({ ...prev, [code]: { inProgress: d.inProgress || [], submissions: d.submissions || [] } }));
+          setCodeActivity((prev) => ({
+            ...prev,
+            [code]: {
+              inProgress: d.inProgress || [],
+              timedOut: d.timedOut || [],
+              submissions: d.submissions || [],
+              staleSessionsClosedOnRefresh: typeof d.staleSessionsClosedOnRefresh === "number" ? d.staleSessionsClosedOnRefresh : 0,
+            },
+          }));
       })
       .catch(() => {})
       .finally(() => setLoadingActivityCode((prev) => (prev === code ? null : prev)));
@@ -815,6 +915,9 @@ export default function AdminDashboard() {
                                       <h6 className="small fw-bold mb-2">Student access</h6>
                                       <p className="text-muted small mb-0">
                                         Students use the shared <strong>test code</strong> and each creates a <strong>personal passcode</strong> at the gate (you do not distribute passcodes). They should save that passcode when entering — the same passcode resumes on another device. Their passcode appears in the activity table after they start.{" "}
+                                        <span className="d-block mt-2">
+                                          <strong>Refresh student activity</strong> updates the sheet: if someone stayed &quot;In progress&quot; after exam time + grace but never finished submit on the server (closed tab, crash, offline), they move to <strong>Timed out</strong> — video may be missing. <strong>Metadata snapshots</strong> and <strong>Video chunks</strong> list each JSON snapshot and .webm segment (10‑min + final); Drive filenames are prefixed with student name and passcode.
+                                        </span>{" "}
                                         {Array.isArray(c.secondaryCodes) && c.secondaryCodes.length > 0 ? (
                                           <span className="d-block mt-2">
                                             <strong>Legacy:</strong> {c.secondaryCodes.length} old session-code row(s) may still exist in the sheet for this code (cleared when you use <strong>Clear all test data</strong> above).
@@ -846,6 +949,8 @@ export default function AdminDashboard() {
                                                 <th>Email</th>
                                                 <th>Status</th>
                                                 <th>Detail</th>
+                                                <th>Metadata snapshots</th>
+                                                <th>Video chunks</th>
                                               </tr>
                                             </thead>
                                             <tbody>
@@ -861,13 +966,46 @@ export default function AdminDashboard() {
                                                   <td>{r.studentClass}</td>
                                                   <td className="text-break">{r.email}</td>
                                                   <td>
-                                                    <span className={r.status === "Submitted" ? "text-success" : "text-warning"}>{r.status}</span>
+                                                    <span
+                                                      className={
+                                                        r.status === "Submitted"
+                                                          ? "text-success"
+                                                          : r.status === "Timed out"
+                                                            ? "text-danger"
+                                                            : r.status === "Recording (uploads ongoing)"
+                                                              ? "text-info"
+                                                              : "text-warning"
+                                                      }
+                                                    >
+                                                      {r.status}
+                                                    </span>
                                                   </td>
                                                   <td>{r.detail}</td>
+                                                  <td className="small text-break" style={{ maxWidth: 300, verticalAlign: "top" }}>
+                                                    <AdminChunkLogSubsection
+                                                      title="Snapshots"
+                                                      summary={r.metadataChunkSummary}
+                                                      logText={r.metadataChunkLog}
+                                                    />
+                                                  </td>
+                                                  <td className="small text-break" style={{ maxWidth: 300, verticalAlign: "top" }}>
+                                                    <AdminChunkLogSubsection
+                                                      title="Video segments"
+                                                      summary={r.chunkSummary}
+                                                      logText={r.videoChunkLog}
+                                                    />
+                                                  </td>
                                                 </tr>
                                               ))}
                                             </tbody>
                                           </table>
+                                          {act.staleSessionsClosedOnRefresh > 0 ? (
+                                            <p className="small text-secondary mt-2 mb-0">
+                                              This refresh moved <strong>{act.staleSessionsClosedOnRefresh}</strong> row(s) from{" "}
+                                              <strong>In progress</strong> to <strong>Timed out</strong> (exam duration + 45 min upload
+                                              grace elapsed without the server receiving submit/metadata — e.g. browser closed at the end).
+                                            </p>
+                                          ) : null}
                                         </div>
                                       )}
                                     </div>
@@ -898,6 +1036,8 @@ export default function AdminDashboard() {
                     (s) =>
                       s.videoStatus === "pending" ||
                       s.videoStatus === "metadata_uploaded" ||
+                      s.videoStatus === "chunked_partial" ||
+                      s.videoStatus === "chunked_open" ||
                       (s.videoStatus && s.videoStatus.startsWith("retry"))
                   ) && (
                     <span className="text-warning ms-1">
@@ -906,9 +1046,11 @@ export default function AdminDashboard() {
                         (s) =>
                           s.videoStatus === "pending" ||
                           s.videoStatus === "metadata_uploaded" ||
+                          s.videoStatus === "chunked_partial" ||
+                          s.videoStatus === "chunked_open" ||
                           (s.videoStatus && s.videoStatus.startsWith("retry"))
                       ).length}{" "}
-                      pending/metadata/retry)
+                      pending/metadata/retry/chunks)
                     </span>
                   )}
                   {submissions.some((s) => s.videoStatus === "failed" || s.videoStatus === "video_failed") && (
@@ -969,13 +1111,15 @@ export default function AdminDashboard() {
                     <th>Mobile</th>
                     <th>Events</th>
                     <th>Video status</th>
+                    <th>Metadata snapshots</th>
+                    <th>Video chunks</th>
                     <th>Download</th>
                   </tr>
                 </thead>
                 <tbody>
                   {submissions.length === 0 ? (
                     <tr>
-                      <td colSpan={12} className="text-center text-muted">No submissions yet.</td>
+                      <td colSpan={14} className="text-center text-muted">No submissions yet.</td>
                     </tr>
                   ) : (
                     submissions.map((row, i) => {
@@ -987,19 +1131,27 @@ export default function AdminDashboard() {
                       const statusLabel =
                         videoStatus === "uploaded"
                           ? "Uploaded"
-                          : videoStatus === "metadata_uploaded"
-                            ? "Metadata saved (video pending)"
-                            : videoStatus === "pending"
-                              ? "Pending"
-                              : videoStatus === "failed" || videoStatus === "video_failed"
-                                ? "Failed"
-                                : videoStatus.startsWith("retry_")
-                                  ? `Retry ${videoStatus.replace("retry_", "")}`
-                                  : videoStatus;
+                          : videoStatus === "chunked_partial"
+                            ? `Partial recording (${row.chunkSegmentCount != null ? row.chunkSegmentCount : "?"} segment(s) on Drive)`
+                            : videoStatus === "chunked_open"
+                              ? "Chunk session started (video in progress)"
+                              : videoStatus === "metadata_uploaded"
+                                ? "Metadata saved (video pending)"
+                                : videoStatus === "pending"
+                                  ? "Pending"
+                                  : videoStatus === "failed" || videoStatus === "video_failed"
+                                    ? "Failed"
+                                    : videoStatus.startsWith("retry_")
+                                      ? `Retry ${videoStatus.replace("retry_", "")}`
+                                      : videoStatus;
                       const statusClass =
                         videoStatus === "uploaded"
                           ? "text-success"
-                          : videoStatus === "pending" || videoStatus === "metadata_uploaded" || videoStatus.startsWith("retry")
+                          : videoStatus === "pending" ||
+                              videoStatus === "metadata_uploaded" ||
+                              videoStatus === "chunked_partial" ||
+                              videoStatus === "chunked_open" ||
+                              videoStatus.startsWith("retry")
                             ? "text-warning"
                             : videoStatus === "failed" || videoStatus === "video_failed"
                               ? "text-danger"
@@ -1037,6 +1189,20 @@ export default function AdminDashboard() {
                                 {row.uploadError}
                               </div>
                             )}
+                          </td>
+                          <td className="small" style={{ maxWidth: 300, verticalAlign: "top" }}>
+                            <AdminChunkLogSubsection
+                              title="Snapshots"
+                              summary={row.metadataChunkSummary}
+                              logText={row.metadataChunkLog}
+                            />
+                          </td>
+                          <td className="small" style={{ maxWidth: 300, verticalAlign: "top" }}>
+                            <AdminChunkLogSubsection
+                              title="Video segments"
+                              summary={row.chunkSummary}
+                              logText={row.videoChunkLog || row.chunkUploadLog}
+                            />
                           </td>
                           <td>
                             <div className="d-flex flex-wrap gap-1">
