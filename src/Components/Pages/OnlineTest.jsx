@@ -360,7 +360,10 @@ export default function OnlineTest() {
   const blurCountRef = useRef(0);
   const phoneInCameraModelRef = useRef(null);
   const lastPhoneFlagRef = useRef(0);
-  const recordTestStartSentRef = useRef(false);
+  /** Set true only after Apps Script recordTestStart returns success (so we retry on failure / backfill gate passcode). */
+  const recordTestStartSucceededRef = useRef(false);
+  const recordTestStartAttemptsRef = useRef(0);
+  const [recordTestStartRetryKey, setRecordTestStartRetryKey] = useState(0);
   const permissionPrevFaceCountRef = useRef(0);
   const testPhasePrevFaceCountRef = useRef(0);
   /** Consumed once in startRecording to restore timer & start time after resume */
@@ -753,13 +756,11 @@ export default function OnlineTest() {
       alert5MinRef.current = resume.timeLeft <= 300;
       alert1MinRef.current = resume.timeLeft <= 60;
       mobileAlertShownRef.current = true;
-      recordTestStartSentRef.current = true;
     } else {
       questionTimesRef.current = [];
       testStartTimeRef.current = Date.now();
       const permissionViolations = violationsRef.current.filter((v) => v && v.permissionPhase === true);
       violationsRef.current = permissionViolations.slice();
-      recordTestStartSentRef.current = false;
       setTimeLeft(durationMinutes * 60);
       alert5MinRef.current = false;
       alert1MinRef.current = false;
@@ -770,44 +771,74 @@ export default function OnlineTest() {
   }, [durationMinutes, questions, paperIdForQuestionImages]);
 
   useEffect(() => {
+    if (phase === PHASE.REGISTRATION) {
+      recordTestStartSucceededRef.current = false;
+      recordTestStartAttemptsRef.current = 0;
+    }
+  }, [phase]);
+
+  useEffect(() => {
     if (phase !== PHASE.TEST) {
-      setSessionStartError("");
+      if (phase !== PHASE.REGISTRATION) setSessionStartError("");
       return;
     }
-    if (!recordTestStartSentRef.current) {
-      recordTestStartSentRef.current = true;
-      const code = typeof sessionStorage !== "undefined" ? sessionStorage.getItem(STORAGE_KEY_TEST_CODE) : null;
-      const sec = (studentEmail || "").trim().toLowerCase();
-      const gatePc = readGatePasscodeForSession();
-      if (code) {
-        const url = getRecordTestStartUrl(
-          code,
-          studentEmail || "",
-          studentName || "",
-          sec,
-          studentClass || "",
-          gatePc,
-          gatePc
-        );
-        if (url) {
-          fetch(url)
-            .then((r) => r.json())
-            .then((data) => {
-              if (data && data.status !== "success") {
-                setSessionStartError(
-                  typeof data.message === "string" && data.message.trim()
-                    ? data.message
-                    : "Could not start your session on the server. Contact the organiser if this continues."
-                );
-              }
-            })
-            .catch(() => {
-              setSessionStartError("Network error while starting your session. Check your connection.");
-            });
-        }
-      }
+    if (recordTestStartSucceededRef.current) return;
+    if (recordTestStartAttemptsRef.current >= 5) {
+      setSessionStartError(
+        (prev) =>
+          prev ||
+          "Could not confirm your session on the server after several tries. Check your connection or refresh the page."
+      );
+      return;
     }
-  }, [phase, studentEmail, studentName, studentClass]);
+    const code = typeof sessionStorage !== "undefined" ? sessionStorage.getItem(STORAGE_KEY_TEST_CODE) : null;
+    const sec = (studentEmail || "").trim().toLowerCase();
+    const gatePc = readGatePasscodeForSession();
+    if (!code) return;
+    if (!gatePc) {
+      setSessionStartError(
+        "This browser does not have your gate passcode. Go back to the test entry page, enter your test code and the same personal passcode you created, then open the test again."
+      );
+      return;
+    }
+    recordTestStartAttemptsRef.current += 1;
+    const url = getRecordTestStartUrl(
+      code,
+      studentEmail || "",
+      studentName || "",
+      sec,
+      studentClass || "",
+      gatePc,
+      gatePc
+    );
+    if (!url) return;
+    let cancelled = false;
+    fetch(url)
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (data && data.status === "success") {
+          recordTestStartSucceededRef.current = true;
+          setSessionStartError("");
+        } else {
+          setSessionStartError(
+            typeof data?.message === "string" && data.message.trim()
+              ? data.message
+              : "Could not start your session on the server. Contact the organiser if this continues."
+          );
+          setRecordTestStartRetryKey((k) => k + 1);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSessionStartError("Network error while starting your session. Check your connection.");
+          setRecordTestStartRetryKey((k) => k + 1);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [phase, studentEmail, studentName, studentClass, recordTestStartRetryKey]);
 
   useEffect(() => {
     if (phase !== PHASE.TEST) return;
@@ -1763,7 +1794,6 @@ export default function OnlineTest() {
     violationsRef.current = Array.isArray(snap.violations) ? snap.violations.slice() : [];
     const startedAt = typeof snap.testStartedAt === "number" ? snap.testStartedAt : Date.now();
     testStartTimeRef.current = startedAt;
-    recordTestStartSentRef.current = true;
     resumeForRecordingRef.current = {
       timeLeft: snap.timeLeft,
       testStartedAt: startedAt,
