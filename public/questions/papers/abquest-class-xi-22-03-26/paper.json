@@ -4,11 +4,7 @@
   "durationMinutes": 120,
   "maxMarks": 320,
   "readTimeMinutes": 125,
-  "instructions": [
-    "Total time allowed for this online test is 120 minutes. The test will auto-submit when the timer ends.",
-    "Engineering stream: Physics, Chemistry, and Maths are to be attempted.",
-    "Medical stream: Physics, Chemistry, and Biology are to be attempted."
-  ],
+  "instructions": [],
   "paperTitleHint": null,
   "sourcePdf": "ABQuest_Class_XI_22_03_26.pdf",
   "answerKeyPresent": false,

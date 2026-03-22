@@ -4,9 +4,7 @@
   "durationMinutes": 120,
   "maxMarks": 320,
   "readTimeMinutes": 125,
-  "instructions": [
-    "Total time allowed for this online test is 120 minutes. The test will auto-submit when the timer ends."
-  ],
+  "instructions": [],
   "paperTitleHint": null,
   "sourcePdf": "ABQuest_Class_IX_22_03_26.pdf",
   "answerKeyPresent": false,
