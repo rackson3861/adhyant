@@ -75,7 +75,7 @@ function studentSessionRowsFromActivity(activity) {
     const detailIp = [s.startedAt ? `Started ${s.startedAt}` : "", chSumIp, metaSumIp].filter(Boolean).join(" · ") || "—";
     rows.push({
       key: `p-${i}-${s.email}`,
-      gatePasscode: s.gatePasscode || "—",
+      gatePasscode: s.gatePasscode || s.resumePassword || "—",
       sessionCode: s.secondaryCode || s.email || "—",
       resumePassword: s.resumePassword || "—",
       name: s.name || "—",
@@ -105,7 +105,7 @@ function studentSessionRowsFromActivity(activity) {
     const detailTo = detailPartsTo.length ? detailPartsTo.join(" · ") : "—";
     rows.push({
       key: `t-${i}-${s.email}`,
-      gatePasscode: s.gatePasscode || "—",
+      gatePasscode: s.gatePasscode || s.resumePassword || "—",
       sessionCode: s.secondaryCode || s.email || "—",
       resumePassword: s.resumePassword || "—",
       name: s.name || "—",
@@ -138,7 +138,7 @@ function studentSessionRowsFromActivity(activity) {
     const mLog = typeof s.metadataChunkLog === "string" ? s.metadataChunkLog : "";
     rows.push({
       key: `s-${i}-${s.email}-${ts}`,
-      gatePasscode: s.gatePasscode || "—",
+      gatePasscode: s.gatePasscode || s.resumePassword || "—",
       sessionCode: s.secondaryCode || s.email || "—",
       resumePassword: "—",
       name: s.studentName || "—",

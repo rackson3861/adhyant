@@ -2844,7 +2844,11 @@ function doGet(e) {
             sessionsSheet.getRange(si + 1, 8).setValue(rowTok);
           }
           sessionsSheet.getRange(si + 1, 3).setValue(name);
-          sessionsSheet.getRange(si + 1, 4).setValue(startedAt);
+          /** Do not reset StartedAt when the same student reconnects (incognito / new tab) while still in progress — preserves timeout logic and fair duration. */
+          var existingStartedStr = sData[si].length >= 4 && sData[si][3] != null ? String(sData[si][3]).trim() : '';
+          if (prevStRec !== 'in_progress' || !existingStartedStr) {
+            sessionsSheet.getRange(si + 1, 4).setValue(startedAt);
+          }
           sessionsSheet.getRange(si + 1, 5).setValue('in_progress');
           if (nCol >= 6) {
             sessionsSheet.getRange(si + 1, 6).setValue(secStart);
@@ -2852,10 +2856,10 @@ function doGet(e) {
           if (nCol >= 7 && studentClassStart) {
             sessionsSheet.getRange(si + 1, 7).setValue(studentClassStart);
           }
-          if (nCol >= 9 && resumePass) {
+          if (resumePass) {
             sessionsSheet.getRange(si + 1, 9).setValue(resumePass);
           }
-          if (nCol >= 10 && gateForSession) {
+          if (gateForSession) {
             sessionsSheet.getRange(si + 1, 10).setValue(gateForSession);
           }
           SpreadsheetApp.flush();
@@ -2934,12 +2938,13 @@ function doGet(e) {
           var gateProg = sData[si].length >= 10 && sData[si][9] != null ? String(sData[si][9]).trim() : '';
           var emailNormAct = normalizeGateEmail_(String(sData[si][1]).trim());
           var chunkAttach = emailNormAct ? attachChunkLogsFromSubmissions_(subData, code, emailNormAct) : chunkLogSummariesFromRaw_('', '');
+          var gateDisplay = gateProg || resumePwProg || null;
           var rowObj = {
             email: String(sData[si][1]).trim(),
             name: String(sData[si][2]).trim(),
             startedAt: sData[si][3] != null ? String(sData[si][3]) : '',
             secondaryCode: secProg || null,
-            gatePasscode: gateProg || null,
+            gatePasscode: gateDisplay,
             studentClass: classProg || null,
             resumePassword: resumePwProg || null,
             videoChunkLog: chunkAttach.videoChunkLog,
