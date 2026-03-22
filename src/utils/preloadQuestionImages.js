@@ -48,7 +48,8 @@ export async function preloadAllQuestionStemImages(questions, paperId, onProgres
     const promise = (async () => {
       let display = url;
       try {
-        const res = await fetch(url, { mode: "cors", cache: "force-cache" });
+        /* default/no-store: force-cache can return stale thumbnails after regenerating assets */
+        const res = await fetch(url, { mode: "cors", cache: "default" });
         if (res.ok) {
           const blob = await res.blob();
           if (blob && String(blob.type || "").startsWith("image/")) {
