@@ -5,7 +5,6 @@ import Footer from "./Footer";
 import {
   getScriptPostUrl,
   getRecordTestStartUrl,
-  getAbandonTestSessionUrl,
   getValidateCodeUrl,
   resolveQuestionImageSrc,
   getDriveThumbnailFallbackUrl,
@@ -152,9 +151,9 @@ const DEFAULT_DATA = {
   durationMinutes: 120,
   maxMarks: null,
   readTimeMinutes: null,
-  paperInstructions: [],
   paperTitleHint: null,
-  seniorStreamInstructions: null,
+  instructionsCallout: null,
+  streamInstructionsCallout: null,
   answerKeyPresent: false,
   questions: [
     { id: "q1", type: "mcq", question: "The SI unit of force is:", options: ["Joule", "Newton", "Pascal", "Watt"] },
@@ -192,9 +191,9 @@ export default function OnlineTest() {
           durationMinutes: local.durationMinutes,
           maxMarks: local.maxMarks,
           readTimeMinutes: local.readTimeMinutes,
-          paperInstructions: local.instructions,
           paperTitleHint: local.paperTitleHint,
-          seniorStreamInstructions: local.seniorStreamInstructions ?? null,
+          instructionsCallout: local.instructionsCallout ?? null,
+          streamInstructionsCallout: local.streamInstructionsCallout ?? null,
           answerKeyPresent: false,
           questions: local.questions,
         });
@@ -217,9 +216,9 @@ export default function OnlineTest() {
             durationMinutes: loaded.durationMinutes ?? 120,
             maxMarks: null,
             readTimeMinutes: null,
-            paperInstructions: [],
             paperTitleHint: null,
-            seniorStreamInstructions: null,
+            instructionsCallout: null,
+            streamInstructionsCallout: null,
             answerKeyPresent: false,
             questions: loaded.questions.map((q, i) => ({
               ...q,
@@ -244,8 +243,8 @@ export default function OnlineTest() {
     questions,
     maxMarks,
     readTimeMinutes,
-    paperInstructions,
-    seniorStreamInstructions,
+    instructionsCallout,
+    streamInstructionsCallout,
     answerKeyPresent,
   } = data;
 
@@ -256,6 +255,17 @@ export default function OnlineTest() {
   const showSectionBreakdown =
     sectionBreakdown.length > 1 ||
     (sectionBreakdown.length === 1 && sectionBreakdown[0].section !== "General");
+
+  /** Class XI–XIII stream papers: how many questions count toward max marks (typically 80 of 100). */
+  const streamMcqAttemptCount = useMemo(() => {
+    if (!streamInstructionsCallout) return null;
+    if (maxMarks != null && !Number.isNaN(Number(maxMarks)) && Number(maxMarks) > 0) {
+      return Math.round(Number(maxMarks) / 4);
+    }
+    if (questions.length === 100) return 80;
+    return null;
+  }, [streamInstructionsCallout, maxMarks, questions.length]);
+
   const paletteGroups = useMemo(() => {
     const keyToGroup = new Map();
     const order = [];
@@ -1726,27 +1736,6 @@ export default function OnlineTest() {
     return `${m}:${pad(sec)}`;
   };
 
-  const handleDiscardSavedSession = useCallback(async () => {
-    try {
-      if (typeof sessionStorage !== "undefined") {
-        const paperId = sessionStorage.getItem(STORAGE_KEY_QUESTION_PAPER_ID) || "default";
-        const testCode = sessionStorage.getItem(STORAGE_KEY_TEST_CODE) || "";
-        const emailKey = (studentEmail || "").trim().toLowerCase();
-        const gatePw = readGatePasscodeForSession();
-        clearTestProgress(paperId, testCode, emailKey, gatePw);
-        if (testCode && emailKey) {
-          const url = getAbandonTestSessionUrl(testCode, emailKey);
-          if (url) await fetch(url).then((r) => r.json()).catch(() => {});
-        }
-      }
-    } catch {
-      /* ignore */
-    }
-    resumeBootRef.current = false;
-    setResumeTick((t) => t + 1);
-    setResumeTimeLeftHint(null);
-  }, [studentEmail]);
-
   const handleResumeFromSnapshot = useCallback(() => {
     if (typeof sessionStorage === "undefined" || questions.length === 0) return;
     const paperId = sessionStorage.getItem(STORAGE_KEY_QUESTION_PAPER_ID) || "default";
@@ -1908,13 +1897,6 @@ export default function OnlineTest() {
                   <h2 className="online-test-reg-heading">Student details</h2>
                   <p className="online-test-reg-desc">Fill in your details before starting the test.</p>
                 </div>
-                <p className="text-muted small mb-3">
-                  Use the <strong>same email</strong> as before on this device to restore saved progress. At the gate, use your <strong>test code</strong> and the <strong>same passcode</strong> you saved when you entered (or the organiser&apos;s instructions for older tests). To discard progress, use{" "}
-                  <button type="button" className="btn btn-link btn-sm p-0 align-baseline" onClick={() => void handleDiscardSavedSession()}>
-                    Start over (clears saved progress)
-                  </button>
-                  .
-                </p>
                 {registrationError && <div className="online-test-reg-error">{registrationError}</div>}
                 <div className="online-test-reg-form">
                   <div className="online-test-reg-field">
@@ -2061,15 +2043,42 @@ export default function OnlineTest() {
                   </div>
                   <ul className="online-test-instr-list">
                     <li>
-                      This test has <strong>{questions.length} questions</strong>
-                      {maxMarks != null && !Number.isNaN(maxMarks) ? (
+                      {streamInstructionsCallout ? (
                         <>
-                          {" "}
-                          · Maximum marks <strong>{maxMarks}</strong>
+                          This test has <strong>{questions.length} MCQ-based questions</strong>
+                          {streamMcqAttemptCount != null ? (
+                            <>
+                              , out of which <strong>{streamMcqAttemptCount}</strong> are to be attempted based on your
+                              stream (Engineering or Medical)
+                            </>
+                          ) : (
+                            <>
+                              ; attempt the questions that match your stream (Engineering or Medical) as described
+                              below
+                            </>
+                          )}
+                          . Maximum marks{" "}
+                          {maxMarks != null && !Number.isNaN(maxMarks) ? (
+                            <strong>{maxMarks}</strong>
+                          ) : (
+                            <strong>
+                              {streamMcqAttemptCount != null ? streamMcqAttemptCount * 4 : "—"}
+                            </strong>
+                          )}
+                          .
                         </>
-                      ) : null}
-                      {" "}
-                      (multiple choice; integer type if shown).
+                      ) : (
+                        <>
+                          This test has <strong>{questions.length} questions</strong>
+                          {maxMarks != null && !Number.isNaN(maxMarks) ? (
+                            <>
+                              {" "}
+                              · Maximum marks <strong>{maxMarks}</strong>
+                            </>
+                          ) : null}
+                          .
+                        </>
+                      )}
                     </li>
                     <li>
                       <strong>Time:</strong>{" "}
@@ -2097,11 +2106,11 @@ export default function OnlineTest() {
                         </ul>
                       </li>
                     )}
-                    {seniorStreamInstructions && (
+                    {instructionsCallout && (
                       <li className="online-test-instr-stream-li">
-                        <div className="online-test-instr-stream-callout" role="region" aria-label="Stream attempt rules">
-                          <p className="online-test-instr-stream-title">{seniorStreamInstructions.heading}</p>
-                          {seniorStreamInstructions.lines.map((row, idx) => (
+                        <div className="online-test-instr-stream-callout" role="region" aria-label="Marking scheme">
+                          <p className="online-test-instr-stream-title">{instructionsCallout.heading}</p>
+                          {instructionsCallout.lines.map((row, idx) => (
                             <p key={idx} className="online-test-instr-stream-line">
                               <strong className="online-test-instr-stream-label">{row.label}:</strong>{" "}
                               <span className="online-test-instr-stream-text">{row.text}</span>
@@ -2110,14 +2119,17 @@ export default function OnlineTest() {
                         </div>
                       </li>
                     )}
-                    {paperInstructions.length > 0 && (
-                      <li className="online-test-instr-sections">
-                        <strong>From the question paper (online-relevant):</strong>
-                        <ul className="online-test-instr-section-list online-test-instr-paper-lines">
-                          {paperInstructions.map((line, idx) => (
-                            <li key={idx}>{line}</li>
+                    {streamInstructionsCallout && (
+                      <li className="online-test-instr-stream-li">
+                        <div className="online-test-instr-stream-callout" role="region" aria-label="Engineering and medical stream rules">
+                          <p className="online-test-instr-stream-title">{streamInstructionsCallout.heading}</p>
+                          {streamInstructionsCallout.lines.map((row, idx) => (
+                            <p key={`stream-${idx}`} className="online-test-instr-stream-line">
+                              <strong className="online-test-instr-stream-label">{row.label}:</strong>{" "}
+                              <span className="online-test-instr-stream-text">{row.text}</span>
+                            </p>
                           ))}
-                        </ul>
+                        </div>
                       </li>
                     )}
                     <li>

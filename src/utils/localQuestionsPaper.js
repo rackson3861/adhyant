@@ -4,7 +4,12 @@
 import { STORAGE_KEY_QUESTION_PAPER_ID } from "../Components/TestCodeGate.jsx";
 import { getPaperBundleUrl, getPapersIndexUrl } from "./localPapersCatalog.js";
 import { getBundledPaperBrandTitle } from "./bundledPaperBrandTitles.js";
-import { getSeniorStreamInstructionBlock, isClass11To13StreamPaper } from "./seniorStreamPaperInstructions.js";
+import {
+  getAbquestMarkingSchemeInstructionBlock,
+  getIgniteFlameBlazeStreamInstructionBlock,
+  isAbquestBundledPaper,
+  isClass11To13StreamPaper,
+} from "./seniorStreamPaperInstructions.js";
 import { applyNascentClass80SectionOverrides } from "./pdfQuestionParser.js";
 
 function vitePublicUrl(relativePath) {
@@ -132,8 +137,12 @@ export function normalizeLocalPaperPayload(raw) {
 
   const questionsWithNascentSections = applyNascentClass80SectionOverrides(paperId, questions);
 
-  const seniorStreamInstructions = isClass11To13StreamPaper(paperId)
-    ? getSeniorStreamInstructionBlock(durationMinutes)
+  const instructionsCallout = isAbquestBundledPaper(paperId)
+    ? getAbquestMarkingSchemeInstructionBlock()
+    : null;
+
+  const streamInstructionsCallout = isClass11To13StreamPaper(paperId)
+    ? getIgniteFlameBlazeStreamInstructionBlock()
     : null;
 
   return {
@@ -147,6 +156,7 @@ export function normalizeLocalPaperPayload(raw) {
     questions: questionsWithNascentSections,
     answerKeyPresent: false,
     paperSource: "local_questions",
-    seniorStreamInstructions,
+    instructionsCallout,
+    streamInstructionsCallout,
   };
 }

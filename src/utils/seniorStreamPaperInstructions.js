@@ -1,7 +1,9 @@
 /**
- * Class XI / XII / XIII papers: PCM (Engineering) vs PCB (Medical) attempt rules.
+ * Bundled ABQuest papers: marking scheme callout on the instructions screen.
+ * (Legacy name kept for import path stability.)
  */
 
+/** Class XI / XII / XIII slugs — used by extract script when merging paper metadata. */
 export function isClass11To13StreamPaper(paperId) {
   const p = String(paperId || "");
   return (
@@ -11,23 +13,44 @@ export function isClass11To13StreamPaper(paperId) {
   );
 }
 
+/** Any bundled paper under public/questions/papers/abquest-class-… */
+export function isAbquestBundledPaper(paperId) {
+  return /^abquest-class-/i.test(String(paperId || ""));
+}
+
 /** Structured block for the instructions screen (bold labels in UI). */
-export function getSeniorStreamInstructionBlock(durationMinutes = 120) {
-  const mins = Math.max(1, Math.min(600, Number(durationMinutes) || 120));
+export function getAbquestMarkingSchemeInstructionBlock() {
   return {
-    heading: "Stream — which sections to attempt",
+    heading: "Marking scheme",
     lines: [
       {
-        label: "Time",
-        text: `Total duration for this online test is ${mins} minutes. The test will auto-submit when the timer ends.`,
+        label: "All sections",
+        text: "Each question carries 4 marks in every section.",
       },
       {
+        label: "Physics, Chemistry, Maths & Biology",
+        text:
+          "Negative marking applies: +4 marks for a correct answer, −1 mark for a wrong answer, and 0 marks if you do not select an answer (unattempted).",
+      },
+    ],
+  };
+}
+
+/**
+ * IGNITE (XI), FLAME (XII), BLAZE (XIII): PCM vs PCB attempt rules.
+ * Timer copy stays in the main “Time” bullet above — no duplicate here.
+ */
+export function getIgniteFlameBlazeStreamInstructionBlock() {
+  return {
+    heading: "Stream — IGNITE, FLAME & BLAZE (Class XI–XIII)",
+    lines: [
+      {
         label: "Engineering stream",
-        text: "Attempt Physics, Chemistry, and Maths.",
+        text: "Physics, Chemistry, and Maths are to be attempted.",
       },
       {
         label: "Medical stream",
-        text: "Attempt Physics, Chemistry, and Biology.",
+        text: "Physics, Chemistry, and Biology are to be attempted.",
       },
     ],
   };

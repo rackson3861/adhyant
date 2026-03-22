@@ -12,7 +12,6 @@ import { getDocument, GlobalWorkerOptions } from "pdfjs-dist/legacy/build/pdf.mj
 import { applyNascentClass80SectionOverrides, parseTextToQuestions } from "../src/utils/pdfQuestionParser.js";
 import { extractPaperMetaFromPdfText } from "../src/utils/pdfPaperMeta.js";
 import { getQuestionPdfPageRange } from "../src/utils/pdfQuestionPageRange.js";
-import { isClass11To13StreamPaper } from "../src/utils/seniorStreamPaperInstructions.js";
 import { extractQuestionJpegBuffersByNumber } from "./lib/pdfQuestionImagesNode.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -117,19 +116,8 @@ async function processOnePdf(absPath, baseName, prevById) {
 
   const titleHint = paperMeta.paperTitleHint ? String(paperMeta.paperTitleHint) : defaultDisplayName(baseName);
 
-  const timingInstruction =
-    "Total time allowed for this online test is 120 minutes. The test will auto-submit when the timer ends.";
+  /** Timer + marking scheme live in the instructions UI; optional PDF-only lines only */
   let mergedInstructions = Array.isArray(paperMeta.instructions) ? [...paperMeta.instructions] : [];
-  if (isClass11To13StreamPaper(slug)) {
-    mergedInstructions = [
-      timingInstruction,
-      "Engineering stream: Physics, Chemistry, and Maths are to be attempted.",
-      "Medical stream: Physics, Chemistry, and Biology are to be attempted.",
-      ...mergedInstructions,
-    ];
-  } else {
-    mergedInstructions = [timingInstruction, ...mergedInstructions];
-  }
 
   const paperJson = {
     paperId: slug,
