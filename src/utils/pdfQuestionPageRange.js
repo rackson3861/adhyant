@@ -8,6 +8,8 @@ export const PDF_FIRST_QUESTION_PAGE = 3;
 
 /**
  * Inclusive 1-based page range to extract text + question images from.
+ * Includes the last page — blank/boilerplate pages are handled gracefully
+ * by the extractor (short text or no question hits → page is skipped).
  * @param {number} numPages
  * @returns {{ startPage: number, endPage: number }}
  */
@@ -19,9 +21,5 @@ export function getQuestionPdfPageRange(numPages) {
   if (n < PDF_FIRST_QUESTION_PAGE) {
     return { startPage: 1, endPage: n };
   }
-  const endPage = n > PDF_FIRST_QUESTION_PAGE ? n - 1 : n;
-  if (endPage < PDF_FIRST_QUESTION_PAGE) {
-    return { startPage: PDF_FIRST_QUESTION_PAGE, endPage: n };
-  }
-  return { startPage: PDF_FIRST_QUESTION_PAGE, endPage };
+  return { startPage: PDF_FIRST_QUESTION_PAGE, endPage: n };
 }

@@ -92,7 +92,38 @@ export function getRecordTestStartUrl(code, email, name, secondaryCode, studentC
   return buildUrl(p);
 }
 
-/** Release in-progress session so the same code+student email can start again (e.g. after “Start over”). */
+/** Save test progress to server for cross-device resume. */
+export function getSaveProgressUrl(code, gatePasscode, email, progressJson) {
+  return buildUrl({
+    action: "saveProgress",
+    code: code || "",
+    gatePasscode: gatePasscode || "",
+    email: (email || "").toString().trim().toLowerCase(),
+    progress: progressJson || "",
+  });
+}
+
+/** Load test progress from server for cross-device resume. */
+export function getLoadProgressUrl(code, gatePasscode, email) {
+  return buildUrl({
+    action: "loadProgress",
+    code: code || "",
+    gatePasscode: gatePasscode || "",
+    email: (email || "").toString().trim().toLowerCase(),
+  });
+}
+
+/** Clear server-side progress after final submission. */
+export function getClearProgressUrl(code, gatePasscode, email) {
+  return buildUrl({
+    action: "clearProgress",
+    code: code || "",
+    gatePasscode: gatePasscode || "",
+    email: (email || "").toString().trim().toLowerCase(),
+  });
+}
+
+/** Release in-progress session so the same code+student email can start again (e.g. after "Start over"). */
 export function getAbandonTestSessionUrl(code, email) {
   return buildUrl({
     action: "abandonTestSession",
@@ -329,7 +360,7 @@ export async function parseAppsScriptFetchResponse(response) {
   }
   if (t.startsWith("<!") || (t.startsWith("<") && t.toLowerCase().includes("doctype"))) {
     throw new Error(
-      "Apps Script returned HTML instead of JSON. For local dev with the Vite proxy, redeploy the web app with “Who has access: Anyone”. “Anyone with Google account” only works when the browser calls Google while signed in — the proxy cannot sign in."
+      'Apps Script returned HTML instead of JSON. For local dev with the Vite proxy, redeploy the web app with "Who has access: Anyone". "Anyone with Google account" only works when the browser calls Google while signed in — the proxy cannot sign in.'
     );
   }
   try {

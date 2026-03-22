@@ -197,48 +197,77 @@ export default function TestCodeGate({ children }) {
   return (
     <>
       <Navbar />
-      <div className="test-code-gate-page container py-4 py-md-5 px-3">
-        <div className="row justify-content-center">
-          <div className="col-12 col-md-8 col-lg-5">
-            <div className="card shadow">
-              <div className="card-body p-4">
-                <h5 className="card-title mb-3">Enter test code & your passcode</h5>
-                <p className="text-muted small mb-3">
-                  Enter the <strong>test code</strong> from your organiser, then <strong>create a passcode</strong> (at least 4 characters). <strong>Save or write down this passcode</strong> — you will need it with the test code to resume on another device or browser. Use the <strong>same</strong> test code and passcode on <strong>any browser or tab</strong> to continue. On the next screen you will enter your details (including your email).
-                </p>
-                <form onSubmit={handleSubmit}>
-                  {error && (
-                    <div className="alert alert-danger py-2 small" role="alert">
-                      {error}
+      <div className="test-code-gate-page">
+        <div className="gate-hero">
+          <div className="container">
+            <div className="row justify-content-center">
+              <div className="col-12 col-md-8 col-lg-5">
+                <div className="gate-card">
+                  <div className="gate-card__header">
+                    <div className="gate-card__icon">
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                      </svg>
                     </div>
-                  )}
-                  <label className="form-label small text-muted mb-1">Test code</label>
-                  <input
-                    type="text"
-                    className="form-control form-control-lg mb-3"
-                    placeholder="e.g. ABC123456"
-                    value={inputCode}
-                    onChange={(e) => setInputCode(e.target.value.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 9))}
-                    autoComplete="off"
-                    disabled={loading}
-                  />
-                  <label className="form-label small text-muted mb-1">
-                    Your passcode{" "}
-                    <span className="fw-normal">(remember this to log back in if you accidentally log out from the test)</span>
-                  </label>
-                  <input
-                    type="text"
-                    className="form-control form-control-lg mb-3"
-                    placeholder="Create a passcode (min 4 characters)"
-                    autoComplete="off"
-                    value={inputPassword}
-                    onChange={(e) => setInputPassword(e.target.value)}
-                    disabled={loading}
-                  />
-                  <button type="submit" className="btn btn-primary w-100" disabled={loading}>
-                    {loading ? "Checking…" : "Continue"}
-                  </button>
-                </form>
+                    <h2 className="gate-card__title">Enter your exam</h2>
+                    <p className="gate-card__subtitle">
+                      Enter the test code from your organiser and create a personal passcode.
+                    </p>
+                  </div>
+
+                  <form onSubmit={handleSubmit} className="gate-card__form">
+                    {error && (
+                      <div className="gate-alert" role="alert">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+                        </svg>
+                        {error}
+                      </div>
+                    )}
+
+                    <div className="gate-field">
+                      <label className="gate-field__label">Test code</label>
+                      <input
+                        type="text"
+                        className="gate-field__input gate-field__input--code"
+                        placeholder="ABC123456"
+                        value={inputCode}
+                        onChange={(e) => setInputCode(e.target.value.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 9))}
+                        autoComplete="off"
+                        disabled={loading}
+                        spellCheck="false"
+                      />
+                    </div>
+
+                    <div className="gate-field">
+                      <label className="gate-field__label">Your passcode</label>
+                      <input
+                        type="text"
+                        className="gate-field__input"
+                        placeholder="Create a passcode (min 4 chars)"
+                        autoComplete="off"
+                        value={inputPassword}
+                        onChange={(e) => setInputPassword(e.target.value)}
+                        disabled={loading}
+                      />
+                      <p className="gate-field__hint">
+                        Save this passcode — you'll need it to resume on another device.
+                      </p>
+                    </div>
+
+                    <button type="submit" className="gate-submit" disabled={loading}>
+                      {loading ? (
+                        <span className="gate-submit__loading">
+                          <span className="gate-spinner" />
+                          Verifying…
+                        </span>
+                      ) : (
+                        "Enter exam"
+                      )}
+                    </button>
+                  </form>
+                </div>
               </div>
             </div>
           </div>
