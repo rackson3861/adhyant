@@ -6,11 +6,11 @@ import "../../assets/css/RegistrationModal.css";
 
 const ONLINE_DATE_OPTIONS = [
   { value: "", label: "Select date" },
-  { value: "22-mar", label: "22 March" },
+  { value: "28-mar", label: "28 March" },
 ];
 const OFFLINE_DATE_OPTIONS = [
   { value: "", label: "Select date" },
-  { value: "22-mar", label: "22 March" },
+  { value: "28-mar", label: "28 March" },
 ];
 
 export default function TestSignUp() {
