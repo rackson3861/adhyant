@@ -1923,7 +1923,6 @@ export default function OnlineTest() {
     const name = (studentName || "").trim();
     const email = (studentEmail || "").trim();
     const phone = (studentPhone || "").trim().replace(/\s/g, "");
-    const adhar = (studentAdhar || "").trim().replace(/\s/g, "");
     if (!name) {
       setRegistrationError("Please enter your full name.");
       return false;
@@ -1939,10 +1938,6 @@ export default function OnlineTest() {
     }
     if (!(studentClass || "").trim()) {
       setRegistrationError("Please select your class / grade from the list.");
-      return false;
-    }
-    if (!/^\d{12}$/.test(adhar)) {
-      setRegistrationError("Aadhaar must be 12 digits.");
       return false;
     }
     setRegistrationError("");
@@ -2049,17 +2044,6 @@ export default function OnlineTest() {
                         </option>
                       ))}
                     </select>
-                  </div>
-                  <div className="online-test-reg-field">
-                    <label className="online-test-reg-label">Aadhaar number (12 digits)</label>
-                    <input
-                      type="text"
-                      className="online-test-reg-input"
-                      placeholder="12-digit Aadhaar"
-                      value={studentAdhar}
-                      onChange={(e) => setStudentAdhar(e.target.value.replace(/\D/g, "").slice(0, 12))}
-                      maxLength={12}
-                    />
                   </div>
                 </div>
                 <button

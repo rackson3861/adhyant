@@ -59,97 +59,81 @@ function AdminChunkLogSubsection({ title, summary, logText }) {
   );
 }
 
-/** Build rows for admin: gate passcode + email + activity (API returns gatePasscode per row when available). */
+/** Build merged rows for admin: one card per student (keyed by email), with all activity entries combined. */
 function studentSessionRowsFromActivity(activity) {
   const ip = Array.isArray(activity?.inProgress) ? activity.inProgress : [];
   const to = Array.isArray(activity?.timedOut) ? activity.timedOut : [];
   const sub = Array.isArray(activity?.submissions) ? activity.submissions : [];
-  const rows = [];
-  ip.forEach((s, i) => {
-    const vLogIp = typeof s.videoChunkLog === "string" ? s.videoChunkLog : typeof s.chunkUploadLog === "string" ? s.chunkUploadLog : "";
-    const mLogIp = typeof s.metadataChunkLog === "string" ? s.metadataChunkLog : "";
-    const chSumIp = s.chunkSummary ? String(s.chunkSummary) : "";
-    const metaSumIp = s.metadataChunkSummary ? String(s.metadataChunkSummary) : "";
-    const detailIp = [s.startedAt ? `Started ${s.startedAt}` : "", chSumIp, metaSumIp].filter(Boolean).join(" · ") || "—";
-    rows.push({
-      key: `p-${i}-${s.email}`,
-      gatePasscode: s.gatePasscode || s.resumePassword || "—",
-      sessionCode: s.secondaryCode || s.email || "—",
-      resumePassword: s.resumePassword || "—",
-      name: s.name || "—",
-      email: s.email || "—",
-      studentClass: s.studentClass || "—",
-      status: "In progress",
-      detail: detailIp,
-      metadataChunkLog: mLogIp,
-      videoChunkLog: vLogIp,
-      metadataChunkSummary: metaSumIp || undefined,
-      chunkSummary: chSumIp || undefined,
-    });
-  });
-  to.forEach((s, i) => {
-    const vLogTo = typeof s.videoChunkLog === "string" ? s.videoChunkLog : typeof s.chunkUploadLog === "string" ? s.chunkUploadLog : "";
-    const mLogTo = typeof s.metadataChunkLog === "string" ? s.metadataChunkLog : "";
-    const chSumTo = s.chunkSummary ? String(s.chunkSummary) : "";
-    const metaSumTo = s.metadataChunkSummary ? String(s.metadataChunkSummary) : "";
-    const detailPartsTo = [];
-    if (s.startedAt) {
-      detailPartsTo.push(
-        `Started ${s.startedAt} — session exceeded allowed time without a server submit (often browser closed); video/metadata may be missing.`
-      );
+  const byEmail = {};
+
+  function getOrCreate(email, name, studentClass, gatePasscode, resumePassword) {
+    const key = (email || "").trim().toLowerCase() || name || "unknown";
+    if (!byEmail[key]) {
+      byEmail[key] = {
+        key: `stu-${key}`,
+        name: name || "—",
+        email: email || "—",
+        studentClass: studentClass || "—",
+        gatePasscode: gatePasscode || "—",
+        resumePassword: resumePassword || "—",
+        statuses: [],
+        entries: [],
+      };
     }
-    if (chSumTo) detailPartsTo.push(chSumTo);
-    if (metaSumTo) detailPartsTo.push(metaSumTo);
-    const detailTo = detailPartsTo.length ? detailPartsTo.join(" · ") : "—";
-    rows.push({
-      key: `t-${i}-${s.email}`,
-      gatePasscode: s.gatePasscode || s.resumePassword || "—",
-      sessionCode: s.secondaryCode || s.email || "—",
-      resumePassword: s.resumePassword || "—",
-      name: s.name || "—",
-      email: s.email || "—",
-      studentClass: s.studentClass || "—",
-      status: "Timed out",
-      detail: detailTo,
-      metadataChunkLog: mLogTo,
-      videoChunkLog: vLogTo,
-      metadataChunkSummary: metaSumTo || undefined,
-      chunkSummary: chSumTo || undefined,
-    });
+    const r = byEmail[key];
+    if (r.name === "—" && name) r.name = name;
+    if (r.studentClass === "—" && studentClass) r.studentClass = studentClass;
+    if (r.gatePasscode === "—" && gatePasscode) r.gatePasscode = gatePasscode;
+    if (r.resumePassword === "—" && resumePassword) r.resumePassword = resumePassword;
+    return r;
+  }
+
+  ip.forEach((s) => {
+    const r = getOrCreate(s.email, s.name, s.studentClass, s.gatePasscode || s.resumePassword, s.resumePassword);
+    r.statuses.push("In progress");
+    const vLog = typeof s.videoChunkLog === "string" ? s.videoChunkLog : typeof s.chunkUploadLog === "string" ? s.chunkUploadLog : "";
+    const mLog = typeof s.metadataChunkLog === "string" ? s.metadataChunkLog : "";
+    const chSum = s.chunkSummary ? String(s.chunkSummary) : "";
+    const metaSum = s.metadataChunkSummary ? String(s.metadataChunkSummary) : "";
+    const detail = [s.startedAt ? `Started ${s.startedAt}` : "", chSum, metaSum].filter(Boolean).join(" · ") || "";
+    r.entries.push({ label: "Session", status: "In progress", detail, metadataChunkLog: mLog, videoChunkLog: vLog, metadataChunkSummary: metaSum, chunkSummary: chSum });
   });
-  sub.forEach((s, i) => {
-    const ts = s.timestamp != null ? String(s.timestamp) : "";
+
+  to.forEach((s) => {
+    const r = getOrCreate(s.email, s.name, s.studentClass, s.gatePasscode || s.resumePassword, s.resumePassword);
+    r.statuses.push("Timed out");
+    const vLog = typeof s.videoChunkLog === "string" ? s.videoChunkLog : typeof s.chunkUploadLog === "string" ? s.chunkUploadLog : "";
+    const mLog = typeof s.metadataChunkLog === "string" ? s.metadataChunkLog : "";
+    const chSum = s.chunkSummary ? String(s.chunkSummary) : "";
+    const metaSum = s.metadataChunkSummary ? String(s.metadataChunkSummary) : "";
+    const detailParts = [];
+    if (s.startedAt) detailParts.push(`Started ${s.startedAt} — timed out`);
+    if (chSum) detailParts.push(chSum);
+    if (metaSum) detailParts.push(metaSum);
+    r.entries.push({ label: "Session", status: "Timed out", detail: detailParts.join(" · ") || "", metadataChunkLog: mLog, videoChunkLog: vLog, metadataChunkSummary: metaSum, chunkSummary: chSum });
+  });
+
+  sub.forEach((s) => {
+    const r = getOrCreate(s.email, s.studentName, s.studentClass, s.gatePasscode || s.resumePassword, "");
     const vs = (s.videoStatus || "").toString().toLowerCase();
-    const examStillUploading =
-      vs === "chunked_partial" || vs === "chunked_open" || vs === "metadata_uploaded";
-    const statusLabel = examStillUploading ? "Recording (uploads ongoing)" : "Submitted";
+    const uploading = vs === "chunked_partial" || vs === "chunked_open" || vs === "metadata_uploaded";
+    const statusLabel = uploading ? "Uploads ongoing" : "Submitted";
+    r.statuses.push(statusLabel);
     const scorePart = s.score != null && s.total != null ? `Score ${s.score}/${s.total}` : "";
     const videoSummary = s.chunkSummary ? String(s.chunkSummary) : "";
     const metaSummary = s.metadataChunkSummary ? String(s.metadataChunkSummary) : "";
-    const detailParts = [
-      scorePart,
-      videoSummary,
-      metaSummary,
-      examStillUploading && s.videoStatus ? `Sheet status: ${s.videoStatus}` : "",
-    ].filter(Boolean);
+    const detailParts = [scorePart, videoSummary, metaSummary, uploading && s.videoStatus ? `Sheet status: ${s.videoStatus}` : ""].filter(Boolean);
     const vLog = typeof s.videoChunkLog === "string" ? s.videoChunkLog : typeof s.chunkUploadLog === "string" ? s.chunkUploadLog : "";
     const mLog = typeof s.metadataChunkLog === "string" ? s.metadataChunkLog : "";
-    rows.push({
-      key: `s-${i}-${s.email}-${ts}`,
-      gatePasscode: s.gatePasscode || s.resumePassword || "—",
-      sessionCode: s.secondaryCode || s.email || "—",
-      resumePassword: "—",
-      name: s.studentName || "—",
-      email: s.email || "—",
-      studentClass: s.studentClass || "—",
-      status: statusLabel,
-      detail: detailParts.length ? detailParts.join(" · ") : "—",
-      submissionTimestamp: ts,
-      metadataChunkLog: mLog,
-      videoChunkLog: vLog,
-    });
+    r.entries.push({ label: "Submission", status: statusLabel, detail: detailParts.join(" · ") || "", metadataChunkLog: mLog, videoChunkLog: vLog, metadataChunkSummary: metaSummary || "", chunkSummary: videoSummary || "", submissionTimestamp: s.timestamp != null ? String(s.timestamp) : "" });
   });
-  return rows;
+
+  return Object.values(byEmail).map((r) => {
+    // Pick best status for the badge: Submitted > Uploads ongoing > In progress > Timed out
+    const statusPriority = ["Submitted", "Uploads ongoing", "In progress", "Timed out"];
+    const bestStatus = statusPriority.find((s) => r.statuses.includes(s)) || r.statuses[0] || "Unknown";
+    return { ...r, status: bestStatus };
+  });
 }
 
 function isGasProxyHtmlError(message) {
@@ -842,7 +826,7 @@ export default function AdminDashboard() {
                               const statusClass =
                                 r.status === "Submitted" ? "admin-student-badge--success"
                                   : r.status === "Timed out" ? "admin-student-badge--danger"
-                                    : r.status === "Recording (uploads ongoing)" ? "admin-student-badge--info"
+                                    : r.status === "Uploads ongoing" ? "admin-student-badge--info"
                                       : "admin-student-badge--warning";
                               return (
                                 <details key={r.key} className="admin-student-card">
@@ -858,22 +842,25 @@ export default function AdminDashboard() {
                                     </div>
                                   </summary>
                                   <div className="admin-student-card__body">
-                                    {r.detail !== "—" && (
-                                      <div className="admin-student-card__section">
-                                        <h6 className="admin-student-card__section-title">Detail</h6>
-                                        <p className="small text-muted mb-0">{r.detail}</p>
+                                    {r.entries.map((entry, ei) => (
+                                      <div key={ei} className="admin-student-card__entry">
+                                        <div className="admin-student-card__entry-header">
+                                          <strong>{entry.label}</strong>
+                                          <span className={`admin-student-badge admin-student-badge--${entry.status === "Submitted" ? "success" : entry.status === "Timed out" ? "danger" : entry.status === "Uploads ongoing" ? "info" : "warning"}`} style={{fontSize: "0.75rem"}}>{entry.status}</span>
+                                        </div>
+                                        {entry.detail && <p className="small text-muted mb-2">{entry.detail}</p>}
+                                        <div className="admin-student-card__uploads">
+                                          <div className="admin-student-card__section">
+                                            <h6 className="admin-student-card__section-title">Metadata snapshots</h6>
+                                            <AdminChunkLogSubsection title="Snapshots" summary={entry.metadataChunkSummary} logText={entry.metadataChunkLog} />
+                                          </div>
+                                          <div className="admin-student-card__section">
+                                            <h6 className="admin-student-card__section-title">Video chunks</h6>
+                                            <AdminChunkLogSubsection title="Video segments" summary={entry.chunkSummary} logText={entry.videoChunkLog} />
+                                          </div>
+                                        </div>
                                       </div>
-                                    )}
-                                    <div className="admin-student-card__uploads">
-                                      <div className="admin-student-card__section">
-                                        <h6 className="admin-student-card__section-title">Metadata snapshots</h6>
-                                        <AdminChunkLogSubsection title="Snapshots" summary={r.metadataChunkSummary} logText={r.metadataChunkLog} />
-                                      </div>
-                                      <div className="admin-student-card__section">
-                                        <h6 className="admin-student-card__section-title">Video chunks</h6>
-                                        <AdminChunkLogSubsection title="Video segments" summary={r.chunkSummary} logText={r.videoChunkLog} />
-                                      </div>
-                                    </div>
+                                    ))}
                                   </div>
                                 </details>
                               );
