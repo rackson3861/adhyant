@@ -25,13 +25,13 @@ export default function Team() {
                   style={{ marginTop: "-23px" }}
                 >
                   <div className="d-flex justify-content-center pt-2 px-1" style={{ backgroundColor: "var(--service-bg)" }}>
-                    <a className="btn btn-sm-square btn-primary mx-1" href>
+                    <a className="btn btn-sm-square btn-primary mx-1" href="https://www.facebook.com/share/1CoJzjgcb3/" target="_blank" rel="noopener noreferrer">
                       <i className="fab fa-facebook-f" />
                     </a>
-                    <a className="btn btn-sm-square btn-primary mx-1" href>
-                      <i className="fab fa-twitter" />
+                    <a className="btn btn-sm-square btn-primary mx-1" href="https://www.linkedin.com/in/awanish-j-05546a82" target="_blank" rel="noopener noreferrer">
+                      <i className="fab fa-linkedin-in" />
                     </a>
-                    <a className="btn btn-sm-square btn-primary mx-1" href>
+                    <a className="btn btn-sm-square btn-primary mx-1" href="https://www.instagram.com/j.awanish" target="_blank" rel="noopener noreferrer">
                       <i className="fab fa-instagram" />
                     </a>
                   </div>
@@ -56,13 +56,13 @@ export default function Team() {
                   style={{ marginTop: "-23px" }}
                 >
                   <div className="d-flex justify-content-center pt-2 px-1" style={{ backgroundColor: "var(--service-bg)" }}>
-                    <a className="btn btn-sm-square btn-primary mx-1" href>
+                    <a className="btn btn-sm-square btn-primary mx-1" href="https://www.facebook.com/k.pooja03/" target="_blank" rel="noopener noreferrer">
                       <i className="fab fa-facebook-f" />
                     </a>
-                    <a className="btn btn-sm-square btn-primary mx-1" href>
-                      <i className="fab fa-twitter" />
+                    <a className="btn btn-sm-square btn-primary mx-1" href="https://www.linkedin.com/in/pooja-kumari-gupta-032979107/" target="_blank" rel="noopener noreferrer">
+                      <i className="fab fa-linkedin-in" />
                     </a>
-                    <a className="btn btn-sm-square btn-primary mx-1" href>
+                    <a className="btn btn-sm-square btn-primary mx-1" href="https://www.instagram.com/pooja.adhyant" target="_blank" rel="noopener noreferrer">
                       <i className="fab fa-instagram" />
                     </a>
                   </div>
@@ -87,13 +87,13 @@ export default function Team() {
                   style={{ marginTop: "-23px" }}
                 >
                   <div className="d-flex justify-content-center pt-2 px-1" style={{ backgroundColor: "var(--service-bg)" }}>
-                    <a className="btn btn-sm-square btn-primary mx-1" href>
+                    <a className="btn btn-sm-square btn-primary mx-1" href="https://www.facebook.com/harsh.gupta.12327" target="_blank" rel="noopener noreferrer">
                       <i className="fab fa-facebook-f" />
                     </a>
-                    <a className="btn btn-sm-square btn-primary mx-1" href>
-                      <i className="fab fa-twitter" />
+                    <a className="btn btn-sm-square btn-primary mx-1" href="https://www.linkedin.com/in/harsh-gupta-613b41150" target="_blank" rel="noopener noreferrer">
+                      <i className="fab fa-linkedin-in" />
                     </a>
-                    <a className="btn btn-sm-square btn-primary mx-1" href>
+                    <a className="btn btn-sm-square btn-primary mx-1" href="https://www.instagram.com/harshg_25" target="_blank" rel="noopener noreferrer">
                       <i className="fab fa-instagram" />
                     </a>
                   </div>
@@ -118,20 +118,20 @@ export default function Team() {
                   style={{ marginTop: "-23px" }}
                 >
                   <div className="d-flex justify-content-center pt-2 px-1" style={{ backgroundColor: "var(--service-bg)" }}>
-                    <a className="btn btn-sm-square btn-primary mx-1" href>
+                    <a className="btn btn-sm-square btn-primary mx-1" href="https://www.facebook.com/share/1CoJzjgcb3/" target="_blank" rel="noopener noreferrer">
                       <i className="fab fa-facebook-f" />
                     </a>
-                    <a className="btn btn-sm-square btn-primary mx-1" href>
-                      <i className="fab fa-twitter" />
+                    <a className="btn btn-sm-square btn-primary mx-1" href="https://www.facebook.com/share/1CoJzjgcb3/" target="_blank" rel="noopener noreferrer">
+                      <i className="fab fa-linkedin-in" />
                     </a>
-                    <a className="btn btn-sm-square btn-primary mx-1" href>
+                    <a className="btn btn-sm-square btn-primary mx-1" href="https://www.facebook.com/share/1CoJzjgcb3/" target="_blank" rel="noopener noreferrer">
                       <i className="fab fa-instagram" />
                     </a>
                   </div>
                 </div>
                 <div className="text-center p-4">
                 <h5 className="mb-0">Priyanka Yadav</h5>
-                  <small><b>AIIMS Bhubaneswar</b></small><br/>
+                  <small><b>AIIMS Rishikesh</b></small><br/>
                   <small>Bio Faculty</small>
                 </div>
               </div>
@@ -157,13 +157,13 @@ export default function Team() {
                   style={{ marginTop: "-23px" }}
                 >
                   <div className="d-flex justify-content-center pt-2 px-1" style={{ backgroundColor: "var(--service-bg)" }}>
-                    <a className="btn btn-sm-square btn-primary mx-1" href>
+                    <a className="btn btn-sm-square btn-primary mx-1" href="https://www.facebook.com/profile.php?id=100006085692843" target="_blank" rel="noopener noreferrer">
                       <i className="fab fa-facebook-f" />
                     </a>
-                    <a className="btn btn-sm-square btn-primary mx-1" href>
-                      <i className="fab fa-twitter" />
+                    <a className="btn btn-sm-square btn-primary mx-1" href="https://www.linkedin.com/in/deepak-kumar-480081113/" target="_blank" rel="noopener noreferrer">
+                      <i className="fab fa-linkedin-in" />
                     </a>
-                    <a className="btn btn-sm-square btn-primary mx-1" href>
+                    <a className="btn btn-sm-square btn-primary mx-1" href="https://www.instagram.com/_deepak.97" target="_blank" rel="noopener noreferrer">
                       <i className="fab fa-instagram" />
                     </a>
                   </div>
@@ -189,13 +189,13 @@ export default function Team() {
                   style={{ marginTop: "-23px" }}
                 >
                   <div className="d-flex justify-content-center pt-2 px-1" style={{ backgroundColor: "var(--service-bg)" }}>
-                    <a className="btn btn-sm-square btn-primary mx-1" href>
+                    <a className="btn btn-sm-square btn-primary mx-1" href="https://www.facebook.com/arti.gupta.7186896/" target="_blank" rel="noopener noreferrer">
                       <i className="fab fa-facebook-f" />
                     </a>
-                    <a className="btn btn-sm-square btn-primary mx-1" href>
-                      <i className="fab fa-twitter" />
+                    <a className="btn btn-sm-square btn-primary mx-1" href="https://www.linkedin.com/in/arti-kumari-4a993316b/" target="_blank" rel="noopener noreferrer">
+                      <i className="fab fa-linkedin-in" />
                     </a>
-                    <a className="btn btn-sm-square btn-primary mx-1" href>
+                    <a className="btn btn-sm-square btn-primary mx-1" href="https://www.instagram.com/arkumari06" target="_blank" rel="noopener noreferrer">
                       <i className="fab fa-instagram" />
                     </a>
                   </div>
@@ -220,13 +220,13 @@ export default function Team() {
                   style={{ marginTop: "-23px" }}
                 >
                   <div className="d-flex justify-content-center pt-2 px-1" style={{ backgroundColor: "var(--service-bg)" }}>
-                    <a className="btn btn-sm-square btn-primary mx-1" href>
+                    <a className="btn btn-sm-square btn-primary mx-1" href="https://www.facebook.com/sumitrairkt/" target="_blank" rel="noopener noreferrer">
                       <i className="fab fa-facebook-f" />
                     </a>
-                    <a className="btn btn-sm-square btn-primary mx-1" href>
-                      <i className="fab fa-twitter" />
+                    <a className="btn btn-sm-square btn-primary mx-1" href="https://www.linkedin.com/in/sumit-rai-63bb3116b/" target="_blank" rel="noopener noreferrer">
+                      <i className="fab fa-linkedin-in" />
                     </a>
-                    <a className="btn btn-sm-square btn-primary mx-1" href>
+                    <a className="btn btn-sm-square btn-primary mx-1" href="https://www.instagram.com/sumit_rackson" target="_blank" rel="noopener noreferrer">
                       <i className="fab fa-instagram" />
                     </a>
                   </div>
@@ -254,10 +254,10 @@ export default function Team() {
                     <a className="btn btn-sm-square btn-primary mx-1" href>
                       <i className="fab fa-facebook-f" />
                     </a>
-                    <a className="btn btn-sm-square btn-primary mx-1" href>
-                      <i className="fab fa-twitter" />
+                    <a className="btn btn-sm-square btn-primary mx-1" href="https://www.linkedin.com/in/erakankshagupta" target="_blank" rel="noopener noreferrer">
+                      <i className="fab fa-linkedin-in" />
                     </a>
-                    <a className="btn btn-sm-square btn-primary mx-1" href>
+                    <a className="btn btn-sm-square btn-primary mx-1" href="https://www.instagram.com/98akanksha/" target="_blank" rel="noopener noreferrer">
                       <i className="fab fa-instagram" />
                     </a>
                   </div>
