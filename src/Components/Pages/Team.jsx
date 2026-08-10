@@ -80,7 +80,7 @@ export default function Team() {
             >
               <div className="team-item" style={{ backgroundColor: "var(--service-bg)" }}>
                 <div className="overflow-hidden">
-                  <img className="img-fluid" src="/img/Team/Uttam.svg" alt="" />
+                  <img className="img-fluid" src="/img/Team/Harsh.png" alt="" />
                 </div>
                 <div
                   className="position-relative d-flex justify-content-center"
@@ -99,8 +99,8 @@ export default function Team() {
                   </div>
                 </div>
                 <div className="text-center p-4">
-                  <h5 className="mb-0">Uttam Singh</h5>
-                  <small><b>IIT Guwahati</b></small><br/>
+                  <h5 className="mb-0">Harsh Singh</h5>
+                  <small><b>NIT Rourkela</b></small><br/>
                   <small>Maths Faculty</small>
                 </div>
               </div>
@@ -111,7 +111,7 @@ export default function Team() {
             >
               <div className="team-item" style={{ backgroundColor: "var(--service-bg)" }}>
                 <div className="overflow-hidden">
-                  <img className="img-fluid" src="/img/Team/Renuka.svg" alt="" />
+                  <img className="img-fluid" src="/img/Team/Priyanka.png" alt="" />
                 </div>
                 <div
                   className="position-relative d-flex justify-content-center"
@@ -130,9 +130,9 @@ export default function Team() {
                   </div>
                 </div>
                 <div className="text-center p-4">
-                <h5 className="mb-0">Renuka Yadav</h5>
-                  <small><b>NIT Kurushetra</b></small><br/>
-                  <small>Maths Faculty</small>
+                <h5 className="mb-0">Priyanka Yadav</h5>
+                  <small><b>AIIMS Bhubaneswar</b></small><br/>
+                  <small>Bio Faculty</small>
                 </div>
               </div>
             </div>
