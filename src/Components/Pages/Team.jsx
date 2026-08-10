@@ -189,7 +189,7 @@ export default function Team() {
                   style={{ marginTop: "-23px" }}
                 >
                   <div className="d-flex justify-content-center pt-2 px-1" style={{ backgroundColor: "var(--service-bg)" }}>
-                    <a className="btn btn-sm-square btn-primary mx-1" href="https://www.facebook.com/share/1CoJzjgcb3/" target="_blank" rel="noopener noreferrer">
+                    <a className="btn btn-sm-square btn-primary mx-1" href="https://www.facebook.com/arti.gupta.7186896/" target="_blank" rel="noopener noreferrer">
                       <i className="fab fa-facebook-f" />
                     </a>
                     <a className="btn btn-sm-square btn-primary mx-1" href="https://www.linkedin.com/in/arti-kumari-4a993316b/" target="_blank" rel="noopener noreferrer">
