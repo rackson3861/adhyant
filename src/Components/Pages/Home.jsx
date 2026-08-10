@@ -18,6 +18,7 @@ export default function Home() {
             <Navbar/>
             <Slide/>
             {/* Sign up for Test (Online & Offline) - shareable link for students */}
+            {/* No exam currently scheduled - re-enable when a new entrance exam date is announced.
             <div className="container py-4 test-signup-banner-wrap">
                 <div className="row justify-content-center">
                     <div className="col-12">
@@ -34,6 +35,7 @@ export default function Home() {
                     </div>
                 </div>
             </div>
+            */}
             <Service/>
             <About/>
             {/* <Courses/> */}
